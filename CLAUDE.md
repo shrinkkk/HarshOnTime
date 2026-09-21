@@ -9,6 +9,7 @@ before starting any phase.
 - Phases 1-5 are built and smoke-tested locally: identity, invites, push plumbing (subscribe on open,
   test push, health row, receipts, dead-subscription cleanup), wake-ups (create/claim/awake/cancel,
   cron reminders and expiry), activities, and preferences/mutes (enforced in `src/push.ts recipients()`).
+- Migration 0003 adds `wakeups.audience` and `activities.text` (targeted sends and custom plans).
 - Not yet done: Phase 6 polish and the real-device test matrix. Push fan-out CPU has not been measured
   on the deployed Worker. iOS is untested.
 - Module map: `src/identity.ts` (auth, groups, invites), `src/push.ts` (recipients, fan-out, subscriptions),

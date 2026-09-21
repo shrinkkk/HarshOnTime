@@ -3,7 +3,7 @@
 
 import { type Defer, fmtTime, logEvent } from "./common";
 import { type AuthContext, type Env, UserError } from "./identity";
-import { NORMAL, URGENT, pushToMembers, recipients } from "./push";
+import { NORMAL, URGENT, listNames, parseAudience, pushToMembers, recipients } from "./push";
 
 const MIN_AHEAD_MS = 60 * 1000; // at least a minute out, otherwise the reminder window has already passed
 const MAX_AHEAD_MS = 36 * 60 * 60 * 1000; // "today or tomorrow"
@@ -23,7 +23,13 @@ export interface WakeupRow {
   claimed_at: number | null;
   awake_at: number | null;
   reminder_sent_at: number | null;
+  audience: string | null; // JSON array of member ids, or NULL = everyone
   created_at: number;
+}
+
+function audienceOf(w: WakeupRow): string[] | null {
+  if (!w.audience) return null;
+  try { const a = JSON.parse(w.audience); return Array.isArray(a) ? a : null; } catch { return null; }
 }
 
 type Joined = WakeupRow & { requester: string; claimer: string | null };
@@ -45,6 +51,7 @@ export function wakeupView(w: Joined) {
     awakeAt: w.awake_at,
     // "Unclaimed" is the nervous red state: reminder is out and still nobody has it.
     unclaimed: w.status === "upcoming" && w.reminder_sent_at !== null,
+    audience: audienceOf(w),
     createdAt: w.created_at,
   };
 }
@@ -64,13 +71,14 @@ export async function listWakeups(env: Env, groupId: string) {
   return rows.results.map(wakeupView);
 }
 
-export async function createWakeup(env: Env, ctx: AuthContext, wakeAtRaw: unknown, noteRaw: unknown, defer: Defer) {
+export async function createWakeup(env: Env, ctx: AuthContext, wakeAtRaw: unknown, noteRaw: unknown, toRaw: unknown, defer: Defer) {
   const now = Date.now();
   if (typeof wakeAtRaw !== "number" || !Number.isFinite(wakeAtRaw)) throw new UserError("Pick a time.");
   const wakeAt = Math.round(wakeAtRaw);
   if (wakeAt < now + MIN_AHEAD_MS) throw new UserError("That time has already passed. Pick a later one.");
   if (wakeAt > now + MAX_AHEAD_MS) throw new UserError("Only today or tomorrow. Ask again closer to the time.");
   const note = typeof noteRaw === "string" && noteRaw.trim() ? noteRaw.trim().slice(0, NOTE_MAX) : null;
+  const audience = await parseAudience(env, ctx.group.id, ctx.member.id, toRaw);
 
   // One live request per person at a time keeps the screen and the pushes sane.
   const existing = await env.DB.prepare(
@@ -82,17 +90,20 @@ export async function createWakeup(env: Env, ctx: AuthContext, wakeAtRaw: unknow
 
   const id = crypto.randomUUID();
   await env.DB.prepare(
-    "INSERT INTO wakeups (id, group_id, requester_id, wake_at, note, status, created_at) VALUES (?, ?, ?, ?, ?, 'upcoming', ?)",
+    "INSERT INTO wakeups (id, group_id, requester_id, wake_at, note, status, audience, created_at) VALUES (?, ?, ?, ?, ?, 'upcoming', ?, ?)",
   )
-    .bind(id, ctx.group.id, ctx.member.id, wakeAt, note, now)
+    .bind(id, ctx.group.id, ctx.member.id, wakeAt, note, audience ? JSON.stringify(audience.ids) : null, now)
     .run();
 
   const time = fmtTime(wakeAt);
-  await logEvent(env, ctx.group.id, "wakeup.created", ctx.member.id, null, `${ctx.member.nickname} asked for a ${time} wake-up`);
+  await logEvent(
+    env, ctx.group.id, "wakeup.created", ctx.member.id, null,
+    audience ? `${ctx.member.nickname} asked ${listNames(audience.names)} for a ${time} wake-up` : `${ctx.member.nickname} asked for a ${time} wake-up`,
+  );
 
   defer(
     (async () => {
-      const to = await recipients(env, ctx.group.id, ctx.member.id, { kind: "wakeups" });
+      const to = await recipients(env, ctx.group.id, ctx.member.id, { kind: "wakeups" }, audience?.ids ?? null);
       await pushToMembers(
         env,
         to,
@@ -134,7 +145,7 @@ export async function claimWakeup(env: Env, ctx: AuthContext, id: string, defer:
   defer(
     (async () => {
       // The requester always hears who's got them; everyone else per their preferences.
-      const to = await recipients(env, ctx.group.id, ctx.member.id, { kind: "wakeups" });
+      const to = await recipients(env, ctx.group.id, ctx.member.id, { kind: "wakeups" }, audienceOf(w));
       await pushToMembers(
         env,
         [w.requester_id, ...to],
@@ -162,7 +173,7 @@ export async function markAwake(env: Env, ctx: AuthContext, id: string, defer: D
   await logEvent(env, ctx.group.id, "wakeup.awake", ctx.member.id, null, `${ctx.member.nickname} is awake`);
   defer(
     (async () => {
-      const to = await recipients(env, ctx.group.id, ctx.member.id, { kind: "wakeups" });
+      const to = await recipients(env, ctx.group.id, ctx.member.id, { kind: "wakeups" }, audienceOf(w));
       if (w.claimed_by) to.push(w.claimed_by); // whoever was doing the waking always gets told to stop
       await pushToMembers(
         env,
@@ -230,7 +241,7 @@ export async function runWakeupCron(env: Env): Promise<void> {
         URGENT,
       );
     } else {
-      const to = await recipients(env, w.group_id, w.requester_id, { kind: "wakeups" });
+      const to = await recipients(env, w.group_id, w.requester_id, { kind: "wakeups" }, audienceOf(w));
       await pushToMembers(
         env,
         to,

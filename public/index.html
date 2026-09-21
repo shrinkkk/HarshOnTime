@@ -76,6 +76,10 @@
   label.field { display: block; margin-top: 8px; font-size: 14px; color: var(--muted); }
   label.field select { margin-top: 4px; color: var(--ink); }
   .checks { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
+  .checks.one { grid-template-columns: 1fr; }
+  .modal { position: fixed; inset: 0; background: rgba(10, 10, 30, .55); display: flex; align-items: flex-end; justify-content: center; z-index: 10; padding: 0 0 env(safe-area-inset-bottom); }
+  .modal-card { background: var(--card); color: var(--ink); width: 100%; max-width: 560px; border-radius: 22px 22px 0 0; padding: 18px 16px 20px; max-height: 85vh; overflow: auto; }
+  @media (min-width: 600px) { .modal { align-items: center; padding: 16px; } .modal-card { border-radius: 22px; } }
   [hidden] { display: none !important; }
 </style>
 </head>
@@ -168,7 +172,8 @@
           <input id="wakeTime" type="time" step="300" aria-label="Time">
         </div>
         <div class="row"><input id="wakeNote" maxlength="200" placeholder="Note (optional) — e.g. 8 AM exam, be brutal"></div>
-        <div class="row two"><button id="wakeCreateBtn">Ask the group</button><button id="wakeFormCloseBtn" class="quiet">Never mind</button></div>
+        <div class="row"><button id="wakeCreateBtn">Ask everyone</button></div>
+        <div class="row two"><button id="wakeCreateSomeBtn" class="quiet">Ask specific people</button><button id="wakeFormCloseBtn" class="quiet">Never mind</button></div>
         <p id="wakeMsg" class="msg" hidden></p>
       </div>
     </section>
@@ -182,9 +187,14 @@
         <button data-kind="sutta">Sutta</button>
         <button data-kind="campus">Campus</button>
       </div>
+      <div class="row" style="margin-top:12px">
+        <input id="customPlanText" maxlength="120" placeholder="Or say anything… e.g. Rooftop in 10, bring the speaker" aria-label="Custom plan">
+        <button id="customPlanBtn" class="quiet">Send a custom plan</button>
+      </div>
       <div id="actConfirm" class="sheet" hidden>
         <p id="actConfirmText"></p>
-        <div class="row two"><button id="actSendBtn">Send it</button><button id="actCancelBtn" class="quiet">Cancel</button></div>
+        <div class="row"><button id="actSendBtn">Send to everyone</button></div>
+        <div class="row two"><button id="actSendSomeBtn" class="quiet">Send to specific people</button><button id="actCancelBtn" class="quiet">Never mind</button></div>
       </div>
       <p id="actMsg" class="msg" hidden></p>
     </section>
@@ -275,6 +285,15 @@
   </div>
 
 </main>
+
+<div id="pickModal" class="modal" hidden>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="pickTitle">
+    <h2 id="pickTitle">Who should get this?</h2>
+    <div id="pickList" class="checks one"></div>
+    <div class="row two" style="margin-top:6px"><button id="pickAllBtn" class="quiet">Select all</button><button id="pickNoneBtn" class="quiet">Clear</button></div>
+    <div class="row"><button id="pickSendBtn">Send</button><button id="pickCancelBtn" class="quiet">Never mind</button></div>
+  </div>
+</div>
 
 <script src="/app.js"></script>
 </body>

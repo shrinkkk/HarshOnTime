@@ -263,6 +263,10 @@
       top.append(el("span", "time", fmtTime(w.wakeAt)), el("span", "day", dayLabel(w.wakeAt)), el("span", "who", mine ? "you" : w.requester));
       card.append(top);
       if (w.note) card.append(el("div", "note", w.note));
+      if (w.audience && home) {
+        const names = home.members.filter((m) => w.audience.includes(m.id)).map((m) => (m.id === meId ? "you" : m.nickname));
+        card.append(el("div", "note", "Asked: " + (names.join(", ") || "specific people")));
+      }
       let statusText, cls;
       if (w.status === "awake") { statusText = (mine ? "You're" : w.requester + " is") + " awake" + (w.claimer ? " — thanks to " + w.claimer : ""); cls = "grey"; }
       else if (w.status === "expired") { statusText = "Expired — no word from " + (mine ? "you" : w.requester); cls = "grey"; }
@@ -337,6 +341,34 @@
     }
   }
 
+  // ---- "Send to specific people" picker. Resolves with member ids, or null if dismissed. ----
+  let pickResolve = null;
+  function openPicker(title) {
+    return new Promise((resolve) => {
+      pickResolve = resolve;
+      $("pickTitle").textContent = title;
+      const list = $("pickList"); list.textContent = "";
+      const others = (home ? home.members : []).filter((m) => m.id !== home.member.id);
+      if (!others.length) list.append(el("p", "muted", "Nobody else in the group yet."));
+      for (const m of others) {
+        const label = el("label", "tog"); const cb = document.createElement("input"); cb.type = "checkbox"; cb.value = m.id;
+        label.append(cb, document.createTextNode(" " + m.nickname)); list.append(label);
+      }
+      $("pickSendBtn").disabled = !others.length;
+      $("pickModal").hidden = false;
+    });
+  }
+  function closePicker(result) { $("pickModal").hidden = true; const r = pickResolve; pickResolve = null; if (r) r(result); }
+  $("pickAllBtn").addEventListener("click", () => { for (const cb of $("pickList").querySelectorAll("input")) cb.checked = true; });
+  $("pickNoneBtn").addEventListener("click", () => { for (const cb of $("pickList").querySelectorAll("input")) cb.checked = false; });
+  $("pickCancelBtn").addEventListener("click", () => closePicker(null));
+  $("pickModal").addEventListener("click", (e) => { if (e.target === $("pickModal")) closePicker(null); });
+  $("pickSendBtn").addEventListener("click", () => {
+    const ids = [...$("pickList").querySelectorAll("input:checked")].map((cb) => cb.value);
+    if (!ids.length) { $("pickTitle").textContent = "Pick at least one person"; return; }
+    closePicker(ids);
+  });
+
   // Wake-up form
   function defaultWakeTime() {
     const d = new Date(Date.now() + 60 * 60 * 1000);
@@ -353,40 +385,57 @@
     $("wakeTime").focus();
   });
   $("wakeFormCloseBtn").addEventListener("click", () => { $("wakeForm").hidden = true; $("askWakeBtn").hidden = false; });
-  $("wakeCreateBtn").addEventListener("click", async () => {
+  async function submitWakeup(toSome) {
     const [hh, mm] = ($("wakeTime").value || "").split(":").map(Number);
     if (!Number.isFinite(hh) || !Number.isFinite(mm)) return say($("wakeMsg"), "Pick a time.", "bad");
     const d = new Date(); d.setHours(hh, mm, 0, 0);
     if ($("wakeDay").value === "tomorrow") d.setDate(d.getDate() + 1);
-    $("wakeCreateBtn").disabled = true;
+    let to = null;
+    if (toSome) { to = await openPicker("Who should wake you?"); if (!to) return; }
+    $("wakeCreateBtn").disabled = true; $("wakeCreateSomeBtn").disabled = true;
     try {
-      await api("/api/wakeups", { method: "POST", body: JSON.stringify({ wakeAt: d.getTime(), note: $("wakeNote").value }) });
+      await api("/api/wakeups", { method: "POST", body: JSON.stringify({ wakeAt: d.getTime(), note: $("wakeNote").value, to }) });
       $("wakeForm").hidden = true;
       await loadHome();
     } catch (e) { say($("wakeMsg"), e.message, "bad"); }
-    $("wakeCreateBtn").disabled = false;
-  });
+    $("wakeCreateBtn").disabled = false; $("wakeCreateSomeBtn").disabled = false;
+  }
+  $("wakeCreateBtn").addEventListener("click", () => submitWakeup(false));
+  $("wakeCreateSomeBtn").addEventListener("click", () => submitWakeup(true));
 
-  // Quick actions
-  let pendingKind = "";
+  // Quick actions (five buttons + a free-text custom plan)
+  let pendingKind = "", pendingText = "";
   $("actGrid").addEventListener("click", (e) => {
     const btn = e.target.closest("button[data-kind]"); if (!btn) return;
-    pendingKind = btn.dataset.kind;
-    $("actConfirmText").textContent = "Tell everyone you want to go for " + KIND_LABEL[pendingKind] + "?";
+    pendingKind = btn.dataset.kind; pendingText = "";
+    $("actConfirmText").textContent = "Say you want to go for " + KIND_LABEL[pendingKind] + "?";
     $("actConfirm").hidden = false; say($("actMsg"), "", null);
   });
+  $("customPlanBtn").addEventListener("click", () => {
+    const t = $("customPlanText").value.trim();
+    if (!t) { say($("actMsg"), "Type something first.", "bad"); $("customPlanText").focus(); return; }
+    pendingKind = "custom"; pendingText = t;
+    $("actConfirmText").textContent = "Send \u201c" + t + "\u201d?";
+    $("actConfirm").hidden = false; say($("actMsg"), "", null);
+  });
+  $("customPlanText").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); $("customPlanBtn").click(); } });
   $("actCancelBtn").addEventListener("click", () => { $("actConfirm").hidden = true; });
-  $("actSendBtn").addEventListener("click", async () => {
-    $("actSendBtn").disabled = true;
+  async function sendActivity(toSome) {
+    let to = null;
+    if (toSome) { to = await openPicker("Send this to who?"); if (!to) return; }
+    $("actSendBtn").disabled = true; $("actSendSomeBtn").disabled = true;
     try {
-      await api("/api/activities", { method: "POST", body: JSON.stringify({ kind: pendingKind }) });
+      await api("/api/activities", { method: "POST", body: JSON.stringify({ kind: pendingKind, text: pendingText, to }) });
       $("actConfirm").hidden = true;
-      say($("actMsg"), "Sent. Now wait and see who shows up.", "ok");
+      if (pendingKind === "custom") $("customPlanText").value = "";
+      say($("actMsg"), to ? "Sent to " + to.length + (to.length === 1 ? " person." : " people.") : "Sent to everyone.", "ok");
       setTimeout(() => say($("actMsg"), "", null), 4000);
       loadHome();
     } catch (e) { say($("actMsg"), e.message, "bad"); }
-    $("actSendBtn").disabled = false;
-  });
+    $("actSendBtn").disabled = false; $("actSendSomeBtn").disabled = false;
+  }
+  $("actSendBtn").addEventListener("click", () => sendActivity(false));
+  $("actSendSomeBtn").addEventListener("click", () => sendActivity(true));
 
   $("inviteBtn").addEventListener("click", async () => {
     $("inviteBtn").disabled = true;

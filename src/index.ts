@@ -149,7 +149,7 @@ async function handleApi(req: Request, env: Env, path: string, defer: Defer): Pr
   // ---- Wake-ups ----
   if (path === "/api/wakeups" && req.method === "POST") {
     const b = await body(req);
-    return json(await createWakeup(env, ctx, b.wakeAt, b.note, defer));
+    return json(await createWakeup(env, ctx, b.wakeAt, b.note, b.to, defer));
   }
   const wakeMatch = /^\/api\/wakeups\/([^/]+)\/(claim|awake|cancel)$/.exec(path);
   if (wakeMatch && req.method === "POST") {
@@ -162,8 +162,8 @@ async function handleApi(req: Request, env: Env, path: string, defer: Defer): Pr
   // ---- Activities ----
   if (path === "/api/activities" && req.method === "POST") {
     const b = await body(req);
-    if (!isActivityKind(b.kind)) return bad("Unknown activity.");
-    return json(await createActivity(env, ctx, b.kind, defer));
+    if (!isActivityKind(b.kind) && b.kind !== "custom") return bad("Unknown activity.");
+    return json(await createActivity(env, ctx, b.kind, b.text, b.to, defer));
   }
 
   // ---- Preferences ----

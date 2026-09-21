@@ -99,6 +99,8 @@ Statuses shown in UI: Upcoming / 🔴 Unclaimed (upcoming with no claimer, once 
 ### Activities
 - Five buttons: Breakfast, Lunch, Snacks, Sutta, Campus. Tap → confirm sheet → push others
   "Arjun wants to go for lunch" (exact wording: "X wants to go for <kind>"). Rate limit: one per kind per member per 10 min.
+- A free-text "custom plan" box sends anything the person types ("Shri: Rooftop in 10"), ≤120 chars, one per 2 min. Custom plans ignore the per-kind switches but respect mute-until and per-person mutes.
+- Both wake-ups and plans offer "send to everyone" or "send to specific people" (a checklist of members). A targeted send stores its audience (`wakeups.audience`, JSON ids); all follow-up pushes for that wake-up (reminder, claim, awake) go only to that audience plus the requester/claimer. The feed shows that a targeted plan was sent and to whom, not its text.
 - No RSVP/scheduling. Appears in the recent-activity feed.
 
 ### Notification preferences (all enforced server-side when computing recipients)

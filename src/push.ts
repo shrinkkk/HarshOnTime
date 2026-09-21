@@ -1,7 +1,7 @@
 // Push plumbing: who should receive a push (preferences and mutes, enforced here and nowhere else),
 // fan-out to their subscriptions, receipts, and dead-subscription cleanup.
 
-import type { Env } from "./identity";
+import { type Env, UserError } from "./identity";
 import { sendPush, type PushOptions, type VapidConfig, vapidAuthorization } from "./webpush";
 
 export const ACTIVITY_KINDS = ["breakfast", "lunch", "snacks", "sutta", "campus"] as const;
@@ -11,8 +11,8 @@ export function isActivityKind(v: unknown): v is ActivityKind {
   return typeof v === "string" && (ACTIVITY_KINDS as readonly string[]).includes(v);
 }
 
-/** What a push is about, so the recipient's preferences can be applied. */
-export type PushScope = { kind: "wakeups" } | { kind: "activities"; activity: ActivityKind };
+/** What a push is about, so the recipient's preferences can be applied. "custom" plans have no per-kind switch; only mutes apply. */
+export type PushScope = { kind: "wakeups" } | { kind: "activities"; activity: ActivityKind | "custom" };
 
 export interface PushPayload {
   title: string;
@@ -74,7 +74,8 @@ export function vapid(env: Env): VapidConfig {
  * member's own preferences and per-person mutes. The actor never receives their own push.
  * A member with no prefs row gets the defaults (everything on).
  */
-export async function recipients(env: Env, groupId: string, actorId: string, scope: PushScope): Promise<string[]> {
+export async function recipients(env: Env, groupId: string, actorId: string, scope: PushScope, only?: string[] | null): Promise<string[]> {
+  const allow = only ? new Set(only) : null;
   const rows = await env.DB.prepare(
     `SELECT m.id AS id, p.member_id AS pm, p.wakeups_enabled, p.wakeups_muted_until, p.activities_muted_until,
             p.breakfast, p.lunch, p.snacks, p.sutta, p.campus
@@ -90,10 +91,12 @@ export async function recipients(env: Env, groupId: string, actorId: string, sco
   const now = Date.now();
   return rows.results
     .filter((r) => {
+      if (allow && !allow.has(r.id)) return false;
       if (mutedBy.has(r.id)) return false;
       if (r.pm === null) return true;
       if (scope.kind === "wakeups") return r.wakeups_enabled === 1 && !(r.wakeups_muted_until && r.wakeups_muted_until > now);
-      return r[scope.activity] === 1 && !(r.activities_muted_until && r.activities_muted_until > now);
+      if (r.activities_muted_until && r.activities_muted_until > now) return false;
+      return scope.activity === "custom" || r[scope.activity] === 1;
     })
     .map((r) => r.id);
 }
@@ -195,4 +198,30 @@ export async function rotateSubscription(env: Env, oldEndpoint: string, sub: Sub
     .bind(sub.endpoint, sub.p256dh, sub.auth, oldEndpoint)
     .run();
   return r.meta.changes === 1;
+}
+
+export interface Audience {
+  ids: string[];
+  names: string[];
+}
+
+/**
+ * Parses an optional "send only to these people" list: member ids that are current members of the
+ * group and not the sender. Returns null for "everyone". Throws if a list was given but nobody valid was on it.
+ */
+export async function parseAudience(env: Env, groupId: string, senderId: string, raw: unknown): Promise<Audience | null> {
+  if (raw === undefined || raw === null) return null;
+  if (!Array.isArray(raw)) throw new UserError("Bad recipient list.");
+  const members = await env.DB.prepare("SELECT id, nickname FROM members WHERE group_id = ? AND removed_at IS NULL ORDER BY joined_at")
+    .bind(groupId)
+    .all<{ id: string; nickname: string }>();
+  const wanted = new Set(raw.filter((v): v is string => typeof v === "string"));
+  const chosen = members.results.filter((m) => wanted.has(m.id) && m.id !== senderId);
+  if (chosen.length === 0) throw new UserError("Pick at least one person.");
+  return { ids: chosen.map((m) => m.id), names: chosen.map((m) => m.nickname) };
+}
+
+export function listNames(names: string[]): string {
+  if (names.length <= 1) return names.join("");
+  return names.slice(0, -1).join(", ") + " and " + names[names.length - 1];
 }
