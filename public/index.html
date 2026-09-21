@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>HarshOnTime – phone check</title>
+<title>HarshOnTime</title>
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <meta name="theme-color" content="#1d1b3a">
@@ -29,97 +29,153 @@
   header p { margin: 0; color: #c9cdea; font-size: 15px; }
   main { max-width: 560px; margin: 0 auto; padding: 0 14px; }
   section { background: var(--card); border: 1px solid var(--line); border-radius: 20px; padding: 16px; margin-top: 14px; }
-  section.done { border-color: var(--ok); }
-  section.locked { opacity: .5; }
   h2 { margin: 0 0 6px; font-size: 18px; display: flex; gap: 8px; align-items: baseline; }
-  h2 .n { color: var(--sun); font-variant-numeric: tabular-nums; }
-  h2 .tick { margin-left: auto; color: var(--ok); font-size: 15px; font-weight: 600; }
+  h2 .sub { margin-left: auto; color: var(--muted); font-size: 13px; font-weight: 500; }
   p { margin: 6px 0; } .muted { color: var(--muted); font-size: 14px; }
   ol { margin: 6px 0 0; padding-left: 20px; } li { margin: 3px 0; }
   input, select, button { font: inherit; border-radius: 12px; border: 1px solid var(--line); padding: 12px; min-height: 48px; width: 100%; background: transparent; color: inherit; }
   button { background: var(--sun); border-color: var(--sun); color: #1d1b3a; font-weight: 700; cursor: pointer; }
   button.quiet { background: transparent; color: var(--ink); border-color: var(--line); font-weight: 600; }
+  button.danger { background: transparent; color: var(--bad); border-color: var(--bad); font-weight: 600; }
   button:disabled { opacity: .45; cursor: default; }
   button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px solid var(--sun); outline-offset: 2px; }
   .row { display: grid; gap: 8px; margin-top: 10px; } .row.two { grid-template-columns: 1fr 1fr; }
   .msg { margin-top: 10px; font-size: 14px; } .msg.bad { color: var(--bad); } .msg.ok { color: var(--ok); }
-  .banner { background: var(--sun); color: #1d1b3a; border-radius: 16px; padding: 12px 14px; margin-top: 14px; font-weight: 600; }
-  .scroll { overflow-x: auto; margin-top: 8px; }
-  table { border-collapse: collapse; width: 100%; font-size: 14px; }
-  th, td { text-align: left; padding: 7px 8px 7px 0; border-bottom: 1px solid var(--line); white-space: nowrap; vertical-align: top; }
-  th { color: var(--muted); font-weight: 600; }
-  .s-ok { color: var(--ok); font-weight: 600; } .s-bad { color: var(--bad); font-weight: 600; } .s-wait { color: var(--wait); font-weight: 600; }
-  dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 8px 0 0; font-size: 14px; }
-  dt { color: var(--muted); } dd { margin: 0; word-break: break-word; }
-  .list .item { padding: 9px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
-  .list .item b { font-size: 15px; }
-  .list .item .line { display: flex; gap: 10px; flex-wrap: wrap; }
+  .grid5 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 10px; }
+  .grid5 button { min-height: 64px; font-size: 14px; }
+  .list .item { padding: 9px 0; border-bottom: 1px solid var(--line); font-size: 14px; display: flex; align-items: center; gap: 10px; }
+  .list .item:last-child { border-bottom: none; }
+  .list .item .name { font-weight: 600; flex: 1; }
+  .list .item .name .you { color: var(--muted); font-weight: 500; font-size: 13px; }
+  .list .item button { width: auto; min-height: 36px; padding: 6px 12px; font-size: 13px; }
+  .codebox { font: 600 20px/1.3 ui-monospace, "SF Mono", Menlo, monospace; letter-spacing: .04em; background: var(--sky); border: 1px dashed var(--line); border-radius: 12px; padding: 12px; text-align: center; margin-top: 10px; word-break: break-all; }
+  .linkbox { font-size: 13px; background: var(--sky); border-radius: 12px; padding: 10px 12px; margin-top: 8px; word-break: break-all; color: var(--muted); }
+  .tabbar { display: flex; gap: 8px; margin-top: 14px; }
+  .tabbar button { flex: 1; }
+  footer.groupfoot { text-align: center; margin-top: 18px; }
+  footer.groupfoot a { color: var(--muted); font-size: 14px; }
   [hidden] { display: none !important; }
 </style>
 </head>
 <body>
-<header>
-  <h1>HarshOnTime phone check</h1>
-  <p>A five-minute test so we know notifications reach every phone before we build the real thing.</p>
-</header>
+<main id="app">
 
-<main>
-  <div id="actionBanner" class="banner" hidden></div>
+  <section id="screenInstall" hidden>
+    <h2>Put HarshOnTime on your home screen</h2>
+    <p>On iPhone, HarshOnTime only works from the home-screen icon, not from a Safari tab — so setting
+    up your identity has to happen there, not in this tab.</p>
+    <ol><li>Open this page in Safari.</li><li>Tap the Share button.</li><li>Choose "Add to Home Screen".</li><li>Open HarshOnTime from the new icon and carry on there.</li></ol>
+  </section>
 
-  <section id="stepInstall">
-    <h2><span class="n">1</span> Put it on your home screen <span class="tick" hidden>Done</span></h2>
-    <div id="installIos" hidden>
-      <p>On iPhone, notifications only work from the home-screen icon, not from a Safari tab.</p>
-      <ol><li>Open this page in Safari.</li><li>Tap the Share button.</li><li>Choose “Add to Home Screen”.</li><li>Open HarshOnTime from the new icon and carry on there.</li></ol>
+  <section id="screenWelcome" hidden>
+    <header style="margin:-16px -16px 14px; border-radius:20px 20px 0 0;">
+      <h1>HarshOnTime</h1>
+      <p>Wake-ups and quick plans, just for your group.</p>
+    </header>
+
+    <div id="joinPreview" hidden>
+      <p><strong id="joinGroupName"></strong> — join with the nickname your friends will know you by.</p>
+      <div class="row">
+        <input id="joinNickname" maxlength="20" placeholder="Your nickname" aria-label="Your nickname">
+        <button id="joinBtn">Join the group</button>
+      </div>
+      <p id="joinMsg" class="msg" hidden></p>
+      <div class="row"><button id="notMeBtn" class="quiet">This isn't my invite</button></div>
     </div>
-    <div id="installAndroid" hidden>
-      <p>In Chrome, open the ⋮ menu and choose “Add to Home screen” or “Install app”, then open HarshOnTime from the new icon.</p>
-      <p class="muted">Notifications also work from a normal Chrome tab on Android, so you can skip this for the test.</p>
+
+    <div id="joinInvalid" hidden>
+      <p id="joinInvalidReason" class="msg bad"></p>
+      <div class="row"><button id="startOverBtn" class="quiet">Start over</button></div>
     </div>
-    <div id="installOther" hidden><p class="muted">You're on a computer. That works for sending tests, but the point is to check phones.</p></div>
-    <p id="installDone" class="msg ok" hidden>Running from the home screen.</p>
-  </section>
 
-  <section id="stepKey">
-    <h2><span class="n">2</span> Group passphrase <span class="tick" hidden>Done</span></h2>
-    <p class="muted">Keeps strangers out of the test. Ask whoever set this up.</p>
-    <div class="row"><input id="keyInput" type="password" autocomplete="off" placeholder="Passphrase" aria-label="Passphrase"><button id="keyBtn">Check passphrase</button></div>
-    <p id="keyMsg" class="msg" hidden></p>
-  </section>
+    <div id="startChoices">
+      <div class="row"><button id="showCreateBtn">Create a new group</button><button id="showJoinBtn" class="quiet">I have an invite code</button></div>
 
-  <section id="stepPush">
-    <h2><span class="n">3</span> Turn on notifications <span class="tick" hidden>Done</span></h2>
-    <p class="muted">Name this phone so we can tell the results apart.</p>
-    <div class="row"><input id="labelInput" maxlength="30" placeholder="e.g. Rahul iPhone" aria-label="Your name and phone"><button id="pushBtn">Turn on notifications</button></div>
-    <button id="offBtn" class="quiet" style="margin-top:8px" hidden>Remove this phone from the test</button>
-    <p id="pushMsg" class="msg" hidden></p>
-  </section>
+      <div id="createForm" hidden style="margin-top:14px">
+        <h2>Create a group</h2>
+        <div class="row">
+          <input id="createGroupName" maxlength="40" placeholder="Group name, e.g. The Nine" aria-label="Group name">
+          <input id="createNickname" maxlength="20" placeholder="Your nickname" aria-label="Your nickname">
+          <button id="createBtn">Create group</button>
+        </div>
+        <p id="createMsg" class="msg" hidden></p>
+      </div>
 
-  <section id="stepSend">
-    <h2><span class="n">4</span> Send a test</h2>
-    <p class="muted">For the real check: pick a delay, lock your phone, put it down, and see whether it arrives.</p>
-    <div class="row two">
-      <select id="targetSel" aria-label="Who gets it"><option value="all">Everyone</option><option value="me">Just this phone</option></select>
-      <select id="delaySel" aria-label="When"><option value="0">Right now</option><option value="2">In 2 minutes</option><option value="10">In 10 minutes</option><option value="60">In 1 hour</option><option value="480">In 8 hours (overnight)</option></select>
+      <div id="joinCodeForm" hidden style="margin-top:14px">
+        <h2>Join with a code</h2>
+        <div class="row">
+          <input id="codeInput" maxlength="40" placeholder="Invite code, e.g. ABCD-EFGH-JKMN" aria-label="Invite code">
+          <button id="checkCodeBtn">Continue</button>
+        </div>
+        <p id="codeMsg" class="msg" hidden></p>
+      </div>
     </div>
-    <div class="row"><button id="sendBtn">Send test notification</button></div>
-    <p id="sendMsg" class="msg" hidden></p>
   </section>
 
-  <section id="results">
-    <h2>What happened</h2>
-    <p class="muted">“Arrived” is reported by the phone itself the moment the notification lands.</p>
-    <div id="pendingBox" class="muted"></div>
-    <div id="resBody" class="list"><p class="muted">Nothing sent yet.</p></div>
-    <h2 style="margin-top:16px">Phones in the test</h2>
-    <div class="scroll"><table><tbody id="subsBody"><tr><td class="muted">None yet.</td></tr></tbody></table></div>
-  </section>
+  <div id="screenHome" hidden>
+    <header>
+      <h1 id="homeGroupName">Group</h1>
+      <p id="homeSub">9-person crew</p>
+    </header>
 
-  <section>
-    <h2>This phone</h2>
-    <dl id="diag"></dl>
-    <button id="copyBtn" class="quiet" style="margin-top:12px">Copy these details</button>
-  </section>
+    <section>
+      <h2>Upcoming Wake-Ups</h2>
+      <p class="muted">Coming soon — wake-up requests arrive in the next update.</p>
+    </section>
+
+    <section>
+      <h2>Quick Group Actions</h2>
+      <div class="grid5">
+        <button disabled title="Coming soon">Breakfast</button>
+        <button disabled title="Coming soon">Lunch</button>
+        <button disabled title="Coming soon">Snacks</button>
+        <button disabled title="Coming soon">Sutta</button>
+        <button disabled title="Coming soon">Campus</button>
+      </div>
+      <p class="muted" style="margin-top:8px">Coming soon.</p>
+    </section>
+
+    <section>
+      <h2>Recent Activity</h2>
+      <p class="muted">Nothing yet. Ask for a wake-up or invite the rest of the group.</p>
+    </section>
+
+    <section>
+      <h2>Group <span class="sub" id="memberCount"></span></h2>
+      <div id="homeMembers" class="list"></div>
+      <div class="row"><button id="inviteBtn">Invite a friend</button></div>
+      <div id="inviteResult" hidden>
+        <div class="codebox" id="inviteCode"></div>
+        <div class="linkbox" id="inviteLink"></div>
+        <div class="row two">
+          <button id="copyInviteBtn" class="quiet">Copy link</button>
+          <button id="shareInviteBtn" class="quiet" hidden>Share</button>
+        </div>
+        <p class="muted" style="margin-top:6px">Expires in 48 hours, and works for one person.</p>
+      </div>
+    </section>
+
+    <footer class="groupfoot"><a href="#" id="settingsLink">Settings</a></footer>
+  </div>
+
+  <div id="screenSettings" hidden>
+    <header>
+      <h1>Settings</h1>
+      <p id="settingsSub"></p>
+    </header>
+    <section>
+      <h2>This device</h2>
+      <p>You're <strong id="settingsNickname"></strong> in <strong id="settingsGroupName"></strong>.</p>
+      <div class="row"><button id="leaveBtn" class="danger">Leave this group</button></div>
+      <p id="leaveMsg" class="msg" hidden></p>
+    </section>
+    <section>
+      <h2>Members</h2>
+      <div id="settingsMembers" class="list"></div>
+    </section>
+    <footer class="groupfoot"><a href="#" id="backHomeLink">Back to home</a></footer>
+  </div>
+
 </main>
 
 <script src="/app.js"></script>

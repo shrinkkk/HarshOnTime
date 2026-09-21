@@ -6,215 +6,198 @@
     del(k) { try { localStorage.removeItem(k); } catch {} },
   };
 
-  // ---- What kind of device and context is this? ----
+  // ---- Device context (carried over from the Phase 0 spike) ----
   const ua = navigator.userAgent;
   const isIos = /iPhone|iPad|iPod/.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-  const isAndroid = /Android/.test(ua);
   const standalone = window.matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
-  const pushSupported = "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
-  const platform = (isIos ? "iOS" : isAndroid ? "Android" : "Desktop") + (standalone ? " app" : " tab");
 
-  // Storage marker: tells us whether Safari and the home-screen app share storage on iOS.
-  if (!store.get("marker")) store.set("marker", JSON.stringify({ at: new Date().toISOString(), where: standalone ? "home-screen app" : "browser tab" }));
-  const marker = JSON.parse(store.get("marker") || "{}");
-
-  let key = store.get("spikeKey") || "";
-  let subId = store.get("subId") || "";
-  let swReg = null;
+  let secret = store.get("deviceSecret") || "";
+  let groupName = store.get("groupName") || "";
+  let nickname = store.get("nickname") || "";
 
   const say = (el, text, kind) => { el.hidden = !text; el.textContent = text || ""; el.className = "msg" + (kind ? " " + kind : ""); };
-  const markDone = (sectionId, done) => { const s = $(sectionId); s.classList.toggle("done", done); s.querySelector(".tick").hidden = !done; };
 
   async function api(path, opts = {}) {
-    const res = await fetch(path, { ...opts, headers: { "content-type": "application/json", "x-spike-key": key, ...(opts.headers || {}) } });
+    const headers = { "content-type": "application/json", ...(opts.headers || {}) };
+    if (secret) headers.authorization = "Bearer " + secret;
+    const res = await fetch(path, { ...opts, headers });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || "Request failed (" + res.status + ")");
     return data;
   }
 
-  function b64urlToBytes(s) {
-    const pad = "=".repeat((4 - (s.length % 4)) % 4);
-    const bin = atob((s + pad).replace(/-/g, "+").replace(/_/g, "/"));
-    return Uint8Array.from(bin, (c) => c.charCodeAt(0));
+  function setIdentity(out) {
+    secret = out.deviceSecret; groupName = out.group.name; nickname = out.member.nickname;
+    store.set("deviceSecret", secret); store.set("groupName", groupName); store.set("nickname", nickname);
+  }
+  function clearIdentity() {
+    secret = ""; groupName = ""; nickname = "";
+    store.del("deviceSecret"); store.del("groupName"); store.del("nickname");
   }
 
-  // ---- Step 1: install ----
-  function renderInstall() {
-    $("installIos").hidden = !(isIos && !standalone);
-    $("installAndroid").hidden = !(isAndroid && !standalone);
-    $("installOther").hidden = isIos || isAndroid || standalone;
-    $("installDone").hidden = !standalone;
-    markDone("stepInstall", standalone);
+  // ---- Screen switching ----
+  const screens = ["screenInstall", "screenWelcome", "screenHome", "screenSettings"];
+  function show(id) { for (const s of screens) $(s).hidden = s !== id; }
+
+  function needsInstallGate() { return isIos && !standalone; }
+
+  // ---- Double-tap confirm helper for destructive actions ----
+  function confirmButton(btn, label, confirmLabel, onConfirm) {
+    let armed = false, timer = null;
+    btn.textContent = label;
+    btn.addEventListener("click", () => {
+      if (!armed) {
+        armed = true; btn.textContent = confirmLabel;
+        timer = setTimeout(() => { armed = false; btn.textContent = label; }, 4000);
+        return;
+      }
+      clearTimeout(timer); armed = false; btn.textContent = label;
+      onConfirm();
+    });
   }
 
-  // ---- Step 2: passphrase ----
-  async function checkKey(candidate) {
-    key = candidate;
-    try { await api("/api/check"); store.set("spikeKey", key); return true; }
-    catch { key = ""; store.del("spikeKey"); return false; }
+  // ---- Welcome / create / join ----
+  let pendingToken = "";
+
+  function showStartChoices() {
+    $("joinPreview").hidden = true; $("joinInvalid").hidden = true; $("startChoices").hidden = false;
+    $("createForm").hidden = true; $("joinCodeForm").hidden = true;
   }
-  $("keyBtn").addEventListener("click", async () => {
-    const v = $("keyInput").value.trim();
-    if (!v) return say($("keyMsg"), "Type the passphrase first.", "bad");
-    $("keyBtn").disabled = true;
-    const ok = await checkKey(v);
-    $("keyBtn").disabled = false;
-    say($("keyMsg"), ok ? "" : "That passphrase didn't match. Check the spelling and try again.", "bad");
-    renderAll();
+  $("showCreateBtn").addEventListener("click", () => { $("createForm").hidden = false; $("joinCodeForm").hidden = true; });
+  $("showJoinBtn").addEventListener("click", () => { $("joinCodeForm").hidden = false; $("createForm").hidden = true; });
+  $("startOverBtn").addEventListener("click", () => { history.replaceState(null, "", "/"); showStartChoices(); });
+  $("notMeBtn").addEventListener("click", () => { history.replaceState(null, "", "/"); showStartChoices(); });
+
+  $("createBtn").addEventListener("click", async () => {
+    const groupNameVal = $("createGroupName").value.trim();
+    const nick = $("createNickname").value.trim();
+    if (!groupNameVal) return say($("createMsg"), "Give the group a name.", "bad");
+    if (nick.length < 2) return say($("createMsg"), "Nicknames are 2-20 characters.", "bad");
+    $("createBtn").disabled = true;
+    try {
+      const out = await api("/api/groups", { method: "POST", body: JSON.stringify({ groupName: groupNameVal, nickname: nick }) });
+      setIdentity(out);
+      route();
+    } catch (e) { say($("createMsg"), e.message, "bad"); }
+    $("createBtn").disabled = false;
   });
 
-  // ---- Step 3: notifications ----
-  $("pushBtn").addEventListener("click", async () => {
-    const label = $("labelInput").value.trim();
-    if (!label) return say($("pushMsg"), "Add your name and phone first so we can tell the results apart.", "bad");
-    if (!pushSupported) {
-      return say($("pushMsg"), isIos && !standalone
-        ? "Safari tabs can't receive notifications on iPhone. Do step 1, then open HarshOnTime from the home-screen icon."
-        : "This browser doesn't support web push.", "bad");
+  async function previewToken(token) {
+    pendingToken = token;
+    let preview;
+    try { preview = await api("/api/invites/" + encodeURIComponent(token)); }
+    catch (e) { preview = { valid: false, reason: e.message }; }
+    $("startChoices").hidden = true;
+    if (preview.valid) {
+      $("joinInvalid").hidden = true; $("joinPreview").hidden = false;
+      $("joinGroupName").textContent = preview.groupName;
+    } else {
+      $("joinPreview").hidden = true; $("joinInvalid").hidden = false;
+      $("joinInvalidReason").textContent = preview.reason || "That invite doesn't work anymore.";
     }
-    $("pushBtn").disabled = true;
-    try {
-      // Must be called directly from this tap, or iOS refuses to show the prompt.
-      const perm = await Notification.requestPermission();
-      if (perm !== "granted") throw new Error(perm === "denied"
-        ? "Notifications are blocked for HarshOnTime. Allow them in your phone's Settings > Notifications, then try again."
-        : "No choice was made. Tap the button again and choose Allow.");
-      const { vapidPublicKey } = await api("/api/config");
-      swReg = swReg || (await navigator.serviceWorker.ready);
-      const existing = await swReg.pushManager.getSubscription();
-      const sub = existing || (await swReg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64urlToBytes(vapidPublicKey) }));
-      const out = await api("/api/subscribe", { method: "POST", body: JSON.stringify({ label, platform, subscription: sub.toJSON() }) });
-      subId = out.id; store.set("subId", subId); store.set("label", label);
-      say($("pushMsg"), "Notifications are on for this phone.", "ok");
-    } catch (e) {
-      say($("pushMsg"), e.message || String(e), "bad");
-    }
-    $("pushBtn").disabled = false;
-    renderAll();
+  }
+
+  $("checkCodeBtn").addEventListener("click", () => {
+    const v = $("codeInput").value.trim();
+    if (!v) return say($("codeMsg"), "Paste or type the invite code.", "bad");
+    say($("codeMsg"), "", null);
+    previewToken(v);
   });
 
-  $("offBtn").addEventListener("click", async () => {
+  $("joinBtn").addEventListener("click", async () => {
+    const nick = $("joinNickname").value.trim();
+    if (nick.length < 2) return say($("joinMsg"), "Nicknames are 2-20 characters.", "bad");
+    $("joinBtn").disabled = true;
     try {
-      if (subId) await api("/api/unsubscribe", { method: "POST", body: JSON.stringify({ id: subId }) });
-      const sub = swReg && (await swReg.pushManager.getSubscription());
-      if (sub) await sub.unsubscribe();
-    } catch {}
-    subId = ""; store.del("subId");
-    say($("pushMsg"), "This phone was removed from the test.", "ok");
-    renderAll();
+      const out = await api("/api/join", { method: "POST", body: JSON.stringify({ token: pendingToken, nickname: nick }) });
+      setIdentity(out);
+      history.replaceState(null, "", "/");
+      route();
+    } catch (e) { say($("joinMsg"), e.message, "bad"); }
+    $("joinBtn").disabled = false;
   });
 
-  // ---- Step 4: send ----
-  $("sendBtn").addEventListener("click", async () => {
-    const delay = Number($("delaySel").value);
-    const toMe = $("targetSel").value === "me";
-    if (toMe && !subId) return say($("sendMsg"), "Turn on notifications on this phone first (step 3).", "bad");
-    $("sendBtn").disabled = true;
-    try {
-      const who = store.get("label") || "Someone";
-      await api("/api/send", { method: "POST", body: JSON.stringify({
-        title: delay ? "Delayed test from " + who : "Test from " + who,
-        body: delay ? "Scheduled " + delay + " min ago. Did this reach your locked phone?" : "If you can read this, push works on this phone.",
-        targetSub: toMe ? subId : undefined, delayMinutes: delay }) });
-      say($("sendMsg"), delay ? "Scheduled. Lock your phone and wait." : "Sent. It should arrive within a few seconds.", "ok");
-      setTimeout(refresh, 2500);
-    } catch (e) { say($("sendMsg"), e.message, "bad"); }
-    $("sendBtn").disabled = false;
-  });
-
-  // ---- Results ----
-  const time = (ms) => new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
-  function cell(text, cls) { const td = document.createElement("td"); td.textContent = text; if (cls) td.className = cls; return td; }
-
-  async function refresh() {
-    if (!key || document.hidden) return;
-    let data; try { data = await api("/api/status"); } catch { return; }
-
-    $("pendingBox").textContent = data.pending.length
-      ? "Waiting to send: " + data.pending.map((p) => "“" + p.title + "” at " + time(p.due_at)).join(", ")
-      : "";
-
-    const rb = $("resBody"); rb.textContent = "";
-    if (!data.deliveries.length) { const p = document.createElement("p"); p.className = "muted"; p.textContent = "Nothing sent yet."; rb.append(p); }
-    const span = (text, cls) => { const s = document.createElement("span"); s.textContent = text; if (cls) s.className = cls; return s; };
-    for (const d of data.deliveries) {
-      const accepted = d.status >= 200 && d.status < 300;
-      const stale = data.now - d.sent_at > 20 * 60000;
+  // ---- Home ----
+  function renderMemberList(container, members, me, { removable }) {
+    container.textContent = "";
+    for (const m of members) {
       const item = document.createElement("div"); item.className = "item";
-      const who = document.createElement("b"); who.textContent = d.label;
-      const l1 = document.createElement("div"); l1.className = "line"; l1.append(who, span(d.platform, "muted"));
-      const l2 = document.createElement("div"); l2.className = "line";
-      l2.append(span(d.title + ", " + time(d.sent_at), "muted"));
-      if (!accepted) l2.append(span(d.status === 0 ? "Couldn't reach the push service" : "Push service refused it (" + d.status + ")" + (d.detail ? ": " + String(d.detail).slice(0, 80) : ""), "s-bad"));
-      else if (d.received_at) l2.append(span("Arrived after " + Math.max(0, Math.round((d.received_at - d.sent_at) / 1000)) + " s", "s-ok"));
-      else l2.append(span(stale ? "Accepted but never arrived" : "Accepted, not arrived yet", stale ? "s-bad" : "s-wait"));
-      item.append(l1, l2); rb.append(item);
-    }
-
-    const sb = $("subsBody"); sb.textContent = "";
-    if (!data.subs.length) { const tr = document.createElement("tr"); tr.append(cell("None yet.", "muted")); sb.append(tr); }
-    for (const s of data.subs) { const tr = document.createElement("tr"); tr.append(cell(s.label + (s.id === subId ? " (this phone)" : "")), cell(s.platform)); sb.append(tr); }
-
-    // If the server no longer knows this phone (push service said the subscription died), say so.
-    if (subId && !data.subs.some((s) => s.id === subId)) {
-      subId = ""; store.del("subId");
-      say($("pushMsg"), "This phone's notification link stopped working and was removed. Turn notifications on again.", "bad");
-      renderAll();
+      const name = document.createElement("span"); name.className = "name";
+      name.textContent = m.nickname;
+      if (m.id === me) { const you = document.createElement("span"); you.className = "you"; you.textContent = " (you)"; name.append(you); }
+      item.append(name);
+      if (removable) {
+        const btn = document.createElement("button"); btn.className = "quiet";
+        confirmButton(btn, m.id === me ? "Leave" : "Remove", "Tap to confirm", async () => {
+          btn.disabled = true;
+          try {
+            await api("/api/members/" + encodeURIComponent(m.id) + "/remove", { method: "POST" });
+            if (m.id === me) { clearIdentity(); history.replaceState(null, "", "/"); showStartChoices(); route(); }
+            else await loadHome();
+          } catch (e) { alert(e.message); btn.disabled = false; }
+        });
+        item.append(btn);
+      }
+      container.append(item);
     }
   }
 
-  // ---- Diagnostics ----
-  async function renderDiag() {
-    const sub = swReg ? await swReg.pushManager.getSubscription().catch(() => null) : null;
-    const rows = [
-      ["Device", platform],
-      ["Opened from", standalone ? "Home-screen icon" : "Browser tab"],
-      ["Push supported here", pushSupported ? "Yes" : "No"],
-      ["Notification permission", "Notification" in window ? Notification.permission : "n/a"],
-      ["Buttons on notifications", "Notification" in window && Notification.maxActions ? "Up to " + Notification.maxActions : "None"],
-      ["Push service", sub ? new URL(sub.endpoint).host : "Not subscribed"],
-      ["Storage first created", (marker.where || "?") + ", " + (marker.at || "?")],
-      ["Browser", ua],
-    ];
-    const dl = $("diag"); dl.textContent = "";
-    for (const [k, v] of rows) { const dt = document.createElement("dt"); dt.textContent = k; const dd = document.createElement("dd"); dd.textContent = v; dl.append(dt, dd); }
-    return rows;
+  let lastMembers = [];
+
+  async function loadHome() {
+    let me;
+    try { me = await api("/api/me"); }
+    catch { clearIdentity(); route(); return; }
+    groupName = me.group.name; nickname = me.member.nickname;
+    store.set("groupName", groupName); store.set("nickname", nickname);
+    lastMembers = me.members;
+    $("homeGroupName").textContent = groupName;
+    $("homeSub").textContent = me.members.length + " of 9 in the group";
+    $("memberCount").textContent = me.members.length + "/9";
+    $("settingsNickname").textContent = nickname;
+    $("settingsGroupName").textContent = groupName;
+    $("settingsSub").textContent = groupName;
+    renderMemberList($("homeMembers"), me.members, me.member.id, { removable: false });
+    renderMemberList($("settingsMembers"), me.members, me.member.id, { removable: true });
+    $("inviteBtn").disabled = me.members.length >= 9;
   }
-  $("copyBtn").addEventListener("click", async () => {
-    const rows = await renderDiag();
-    const text = rows.map(([k, v]) => k + ": " + v).join("\n");
-    try { await navigator.clipboard.writeText(text); $("copyBtn").textContent = "Copied"; } catch { $("copyBtn").textContent = "Couldn't copy. Take a screenshot instead."; }
+
+  $("inviteBtn").addEventListener("click", async () => {
+    $("inviteBtn").disabled = true;
+    try {
+      const out = await api("/api/invites", { method: "POST" });
+      $("inviteResult").hidden = false;
+      $("inviteCode").textContent = out.code;
+      $("inviteLink").textContent = out.url;
+      $("shareInviteBtn").hidden = !navigator.share;
+      $("copyInviteBtn").onclick = async () => {
+        try { await navigator.clipboard.writeText(out.url); $("copyInviteBtn").textContent = "Copied"; }
+        catch { $("copyInviteBtn").textContent = "Couldn't copy — select the link above."; }
+      };
+      $("shareInviteBtn").onclick = () => navigator.share({ title: "Join " + groupName + " on HarshOnTime", url: out.url }).catch(() => {});
+    } catch (e) { alert(e.message); }
+    $("inviteBtn").disabled = false;
   });
 
-  function renderAll() {
-    renderInstall();
-    markDone("stepKey", !!key);
-    $("keyInput").closest(".row").hidden = !!key;
-    markDone("stepPush", !!subId);
-    $("stepPush").classList.toggle("locked", !key);
-    $("stepSend").classList.toggle("locked", !key);
-    $("pushBtn").disabled = !key; $("sendBtn").disabled = !key;
-    $("pushBtn").textContent = subId ? "Refresh this phone's notification link" : "Turn on notifications";
-    $("offBtn").hidden = !subId;
-    if (!$("labelInput").value) $("labelInput").value = store.get("label") || "";
-    renderDiag(); refresh();
+  $("settingsLink").addEventListener("click", (e) => { e.preventDefault(); show("screenSettings"); });
+  $("backHomeLink").addEventListener("click", (e) => { e.preventDefault(); show("screenHome"); loadHome(); });
+
+  // ---- Routing ----
+  function route() {
+    // An already-established identity always gets to Home; the install gate only blocks a fresh
+    // create/join, since that is the moment a new device secret would otherwise be created in a
+    // Safari tab whose storage may not carry over to the installed app.
+    if (secret) { show("screenHome"); loadHome(); return; }
+    if (needsInstallGate()) { show("screenInstall"); return; }
+    show("screenWelcome");
+    const hashToken = location.hash.replace(/^#/, "");
+    if (hashToken) { showStartChoices(); previewToken(hashToken); }
+    else showStartChoices();
   }
 
-  // Tapped a notification (or its button)? Show that it worked.
-  const params = new URLSearchParams(location.search);
-  if (params.has("push")) {
-    const b = $("actionBanner"); b.hidden = false;
-    b.textContent = params.get("action") ? "You tapped the “I'll do it” button on the notification. Buttons work on this phone." : "You opened this from a notification. Tapping works on this phone.";
-    history.replaceState(null, "", "/");
-  }
+  // Registered unconditionally so it's ready before Phase 2 wires up push subscriptions.
+  if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
 
-  (async () => {
-    if ("serviceWorker" in navigator) {
-      try { await navigator.serviceWorker.register("/sw.js"); swReg = await navigator.serviceWorker.ready; } catch {}
-    }
-    if (key && !(await checkKey(key))) key = "";
-    renderAll();
-    setInterval(refresh, 10000);
-    document.addEventListener("visibilitychange", refresh);
-  })();
+  route();
+  document.addEventListener("visibilitychange", () => { if (!document.hidden && secret && !$("screenHome").hidden) loadHome(); });
 })();
