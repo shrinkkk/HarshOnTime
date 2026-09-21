@@ -1,4 +1,4 @@
-import { createActivity } from "./activities";
+import { createActivity, rsvpSummaries, setRsvp } from "./activities";
 import type { Defer } from "./common";
 import {
   type Env,
@@ -108,11 +108,16 @@ async function handleApi(req: Request, env: Env, path: string, defer: Defer): Pr
       now: Date.now(),
     };
     if (path === "/api/home") {
-      const events = await env.DB.prepare("SELECT id, kind, actor_id, text, created_at FROM events WHERE group_id = ? ORDER BY created_at DESC LIMIT 20")
+      const events = await env.DB.prepare("SELECT id, kind, actor_id, text, ref_id, created_at FROM events WHERE group_id = ? ORDER BY created_at DESC LIMIT 20")
         .bind(ctx.group.id)
-        .all<{ id: string; kind: string; actor_id: string | null; text: string; created_at: number }>();
+        .all<{ id: string; kind: string; actor_id: string | null; text: string; ref_id: string | null; created_at: number }>();
+      const planIds = events.results.filter((e) => e.kind.startsWith("activity.") && e.ref_id).map((e) => e.ref_id as string);
+      const rsvps = await rsvpSummaries(env, ctx, planIds);
       out.wakeups = await listWakeups(env, ctx.group.id);
-      out.events = events.results.map((e) => ({ id: e.id, kind: e.kind, actorId: e.actor_id, text: e.text, at: e.created_at }));
+      out.events = events.results.map((e) => ({
+        id: e.id, kind: e.kind, actorId: e.actor_id, text: e.text, at: e.created_at,
+        plan: e.ref_id && rsvps[e.ref_id] ? { id: e.ref_id, ...rsvps[e.ref_id] } : null,
+      }));
     }
     return json(out);
   }
@@ -164,6 +169,14 @@ async function handleApi(req: Request, env: Env, path: string, defer: Defer): Pr
     const b = await body(req);
     if (!isActivityKind(b.kind) && b.kind !== "custom") return bad("Unknown activity.");
     return json(await createActivity(env, ctx, b.kind, b.text, b.to, defer));
+  }
+
+  const rsvpMatch = /^\/api\/activities\/([^/]+)\/rsvp$/.exec(path);
+  if (rsvpMatch && req.method === "POST") {
+    const b = await body(req);
+    const status = b.status === "in" || b.status === "out" ? b.status : b.status === null ? null : undefined;
+    if (status === undefined) return bad("Say in or out.");
+    return json(await setRsvp(env, ctx, decodeURIComponent(rsvpMatch[1]), status));
   }
 
   // ---- Preferences ----

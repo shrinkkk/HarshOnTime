@@ -19,11 +19,12 @@ export async function logEvent(
   actorId: string | null,
   subjectId: string | null,
   text: string,
+  refId: string | null = null,
 ): Promise<void> {
   await env.DB.prepare(
-    "INSERT INTO events (id, group_id, kind, actor_id, subject_id, text, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+    "INSERT INTO events (id, group_id, kind, actor_id, subject_id, text, ref_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
   )
-    .bind(crypto.randomUUID(), groupId, kind, actorId, subjectId, text, Date.now())
+    .bind(crypto.randomUUID(), groupId, kind, actorId, subjectId, text, refId, Date.now())
     .run();
 }
 

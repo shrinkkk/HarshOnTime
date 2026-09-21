@@ -80,6 +80,16 @@
   .modal { position: fixed; inset: 0; background: rgba(10, 10, 30, .55); display: flex; align-items: flex-end; justify-content: center; z-index: 10; padding: 0 0 env(safe-area-inset-bottom); }
   .modal-card { background: var(--card); color: var(--ink); width: 100%; max-width: 560px; border-radius: 22px 22px 0 0; padding: 18px 16px 20px; max-height: 85vh; overflow: auto; }
   @media (min-width: 600px) { .modal { align-items: center; padding: 16px; } .modal-card { border-radius: 22px; } }
+  .feeditem { padding: 9px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+  .feeditem:last-child { border-bottom: none; }
+  .feeditem .line { display: flex; align-items: baseline; gap: 10px; }
+  .feeditem .line .text { flex: 1; }
+  .feeditem .rsvp { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+  .feeditem .rsvp button { width: auto; min-height: 34px; padding: 4px 14px; font-size: 13px; }
+  .feeditem .rsvp button.on { background: var(--sun); border-color: var(--sun); color: #1d1b3a; }
+  .feeditem .rsvp button.on.out { background: var(--line); border-color: var(--line); color: var(--ink); }
+  .feeditem .who { font-size: 13px; color: var(--muted); margin-top: 4px; }
+  .feeditem .who b { color: var(--ok); font-weight: 600; }
   [hidden] { display: none !important; }
 </style>
 </head>
@@ -184,6 +194,7 @@
         <button data-kind="breakfast">Breakfast</button>
         <button data-kind="lunch">Lunch</button>
         <button data-kind="snacks">Snacks</button>
+        <button data-kind="dinner">Dinner</button>
         <button data-kind="sutta">Sutta</button>
         <button data-kind="campus">Campus</button>
       </div>
@@ -256,6 +267,7 @@
         <label class="tog"><input type="checkbox" data-kind="breakfast"> Breakfast</label>
         <label class="tog"><input type="checkbox" data-kind="lunch"> Lunch</label>
         <label class="tog"><input type="checkbox" data-kind="snacks"> Snacks</label>
+        <label class="tog"><input type="checkbox" data-kind="dinner"> Dinner</label>
         <label class="tog"><input type="checkbox" data-kind="sutta"> Sutta</label>
         <label class="tog"><input type="checkbox" data-kind="campus"> Campus</label>
       </div>

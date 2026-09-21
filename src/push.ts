@@ -4,7 +4,7 @@
 import { type Env, UserError } from "./identity";
 import { sendPush, type PushOptions, type VapidConfig, vapidAuthorization } from "./webpush";
 
-export const ACTIVITY_KINDS = ["breakfast", "lunch", "snacks", "sutta", "campus"] as const;
+export const ACTIVITY_KINDS = ["breakfast", "lunch", "snacks", "dinner", "sutta", "campus"] as const;
 export type ActivityKind = (typeof ACTIVITY_KINDS)[number];
 
 export function isActivityKind(v: unknown): v is ActivityKind {
@@ -42,6 +42,7 @@ export interface PrefsRow {
   breakfast: number;
   lunch: number;
   snacks: number;
+  dinner: number;
   sutta: number;
   campus: number;
 }
@@ -53,6 +54,7 @@ export const DEFAULT_PREFS: Omit<PrefsRow, "member_id"> = {
   breakfast: 1,
   lunch: 1,
   snacks: 1,
+  dinner: 1,
   sutta: 1,
   campus: 1,
 };
@@ -78,7 +80,7 @@ export async function recipients(env: Env, groupId: string, actorId: string, sco
   const allow = only ? new Set(only) : null;
   const rows = await env.DB.prepare(
     `SELECT m.id AS id, p.member_id AS pm, p.wakeups_enabled, p.wakeups_muted_until, p.activities_muted_until,
-            p.breakfast, p.lunch, p.snacks, p.sutta, p.campus
+            p.breakfast, p.lunch, p.snacks, p.dinner, p.sutta, p.campus
        FROM members m LEFT JOIN prefs p ON p.member_id = m.id
       WHERE m.group_id = ? AND m.removed_at IS NULL AND m.id <> ?`,
   )

@@ -134,7 +134,7 @@
   });
 
   // ---- Formatting ----
-  const KIND_LABEL = { breakfast: "breakfast", lunch: "lunch", snacks: "snacks", sutta: "sutta", campus: "campus" };
+  const KIND_LABEL = { breakfast: "breakfast", lunch: "lunch", snacks: "snacks", dinner: "dinner", sutta: "sutta", campus: "campus" };
   function fmtTime(ms) { return new Date(ms).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }); }
   function dayLabel(ms) {
     const d = new Date(ms), t = new Date(); t.setHours(0, 0, 0, 0);
@@ -303,9 +303,33 @@
     const box = $("feed"); box.textContent = "";
     $("feedEmpty").hidden = events.length > 0;
     for (const e of events) {
-      const item = el("div", "item");
-      item.append(el("span", "name", e.text), el("span", "when", ago(e.at)));
-      item.querySelector(".name").style.fontWeight = "500";
+      const item = el("div", "feeditem");
+      const line = el("div", "line"); line.append(el("span", "text", e.text), el("span", "when", ago(e.at))); item.append(line);
+      if (e.plan) {
+        const p = e.plan;
+        if (p.canReply) {
+          const row = el("div", "rsvp");
+          const mk = (status, label) => {
+            const b = el("button", "quiet" + (p.mine === status ? " on " + status : ""), label);
+            b.addEventListener("click", async () => {
+              const next = p.mine === status ? null : status; // tapping your current answer clears it
+              for (const x of row.querySelectorAll("button")) x.disabled = true;
+              try { await api("/api/activities/" + encodeURIComponent(p.id) + "/rsvp", { method: "POST", body: JSON.stringify({ status: next }) }); }
+              catch (err) { alert(err.message); }
+              loadHome();
+            });
+            return b;
+          };
+          row.append(mk("in", "In"), mk("out", "Out"));
+          item.append(row);
+        }
+        if (p.in.length || p.out.length) {
+          const who = el("div", "who");
+          if (p.in.length) { const b = el("b", "", "In: "); who.append(b, document.createTextNode(p.in.join(", "))); }
+          if (p.out.length) who.append(document.createTextNode((p.in.length ? "  ·  " : "") + "Out: " + p.out.join(", ")));
+          item.append(who);
+        }
+      }
       box.append(item);
     }
   }

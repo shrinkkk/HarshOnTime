@@ -9,6 +9,7 @@ before starting any phase.
 - Phases 1-5 are built and smoke-tested locally: identity, invites, push plumbing (subscribe on open,
   test push, health row, receipts, dead-subscription cleanup), wake-ups (create/claim/awake/cancel,
   cron reminders and expiry), activities, and preferences/mutes (enforced in `src/push.ts recipients()`).
+- Migration 0004 adds `rsvps` (in/out per plan), `activities.audience`, `events.ref_id`, `prefs.dinner`.
 - Migration 0003 adds `wakeups.audience` and `activities.text` (targeted sends and custom plans).
 - Not yet done: Phase 6 polish and the real-device test matrix. Push fan-out CPU has not been measured
   on the deployed Worker. iOS is untested.
@@ -32,7 +33,7 @@ before starting any phase.
 - Every push handler must call `showNotification` unconditionally (iOS revokes subscriptions otherwise).
 - Stay within Cloudflare free-plan limits (10 ms CPU per invocation, 5 cron triggers per account). Measure push fan-out CPU on the real Worker; split per recipient only if needed.
 - Keep it small: one Worker, one D1 database, plain HTML/CSS/JS in `public/`, no build step unless the SPEC's Phase 1 decides otherwise. Nine users; do not add scale features.
-- Mobile-first UI, few taps, friendly tone. Group vocabulary: the five activities are exactly Breakfast, Lunch, Snacks, Sutta, Campus.
+- Mobile-first UI, few taps, friendly tone. Group vocabulary: the six activity buttons are exactly Breakfast, Lunch, Snacks, Dinner, Sutta, Campus, plus a free-text custom plan.
 
 ## Workflow
 - Work one phase at a time as listed in `docs/SPEC.md`; run tests + typecheck + a local smoke run before each commit.

@@ -12,6 +12,7 @@ export const ACTIVITY_LABEL: Record<ActivityKind, string> = {
   breakfast: "breakfast",
   lunch: "lunch",
   snacks: "snacks",
+  dinner: "dinner",
   sutta: "sutta",
   campus: "campus",
 };
@@ -43,16 +44,21 @@ export async function createActivity(env: Env, ctx: AuthContext, kind: ActivityK
   }
   const audience = await parseAudience(env, ctx.group.id, ctx.member.id, toRaw);
 
-  await env.DB.prepare("INSERT INTO activities (id, group_id, member_id, kind, text, created_at) VALUES (?, ?, ?, ?, ?, ?)")
-    .bind(crypto.randomUUID(), ctx.group.id, ctx.member.id, kind, custom, now)
-    .run();
+  const id = crypto.randomUUID();
+  await env.DB.batch([
+    env.DB.prepare("INSERT INTO activities (id, group_id, member_id, kind, text, audience, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)").bind(
+      id, ctx.group.id, ctx.member.id, kind, custom, audience ? JSON.stringify(audience.ids) : null, now,
+    ),
+    // Whoever suggests a plan is obviously in.
+    env.DB.prepare("INSERT INTO rsvps (activity_id, member_id, status, at) VALUES (?, ?, 'in', ?)").bind(id, ctx.member.id, now),
+  ]);
   // A targeted plan is between the sender and the people they picked: the feed says it happened, not what it said.
   const feedText = audience
     ? kind === "custom"
       ? `${ctx.member.nickname} sent a plan to ${listNames(audience.names)}`
       : `${ctx.member.nickname} asked ${listNames(audience.names)} to go for ${ACTIVITY_LABEL[kind]}`
     : text;
-  await logEvent(env, ctx.group.id, `activity.${kind}`, ctx.member.id, null, feedText);
+  await logEvent(env, ctx.group.id, `activity.${kind}`, ctx.member.id, null, feedText, id);
   defer(
     (async () => {
       const to = await recipients(env, ctx.group.id, ctx.member.id, { kind: "activities", activity: kind }, audience?.ids ?? null);
@@ -64,4 +70,67 @@ export async function createActivity(env: Env, ctx: AuthContext, kind: ActivityK
     })(),
   );
   return { ok: true, text };
+}
+
+export type RsvpStatus = "in" | "out";
+
+/** Sets, changes, or (status null) clears the caller's in/out on a plan. Only people the plan was sent to may reply. */
+export async function setRsvp(env: Env, ctx: AuthContext, activityId: string, status: RsvpStatus | null) {
+  const a = await env.DB.prepare("SELECT id, member_id, audience FROM activities WHERE id = ? AND group_id = ?")
+    .bind(activityId, ctx.group.id)
+    .first<{ id: string; member_id: string; audience: string | null }>();
+  if (!a) throw new UserError("That plan doesn't exist.");
+  if (a.audience) {
+    let ids: unknown = [];
+    try { ids = JSON.parse(a.audience); } catch {}
+    if (a.member_id !== ctx.member.id && !(Array.isArray(ids) && ids.includes(ctx.member.id))) throw new UserError("This plan wasn't sent to you.");
+  }
+  if (status === null) {
+    await env.DB.prepare("DELETE FROM rsvps WHERE activity_id = ? AND member_id = ?").bind(activityId, ctx.member.id).run();
+  } else {
+    await env.DB.prepare(
+      "INSERT INTO rsvps (activity_id, member_id, status, at) VALUES (?, ?, ?, ?) ON CONFLICT(activity_id, member_id) DO UPDATE SET status = excluded.status, at = excluded.at",
+    )
+      .bind(activityId, ctx.member.id, status, Date.now())
+      .run();
+  }
+  return { ok: true };
+}
+
+export interface RsvpSummary {
+  in: string[]; // nicknames
+  out: string[];
+  mine: RsvpStatus | null;
+  canReply: boolean;
+}
+
+/** In/out state for a set of plans, as seen by the caller. Keyed by activity id. */
+export async function rsvpSummaries(env: Env, ctx: AuthContext, activityIds: string[]): Promise<Record<string, RsvpSummary>> {
+  const out: Record<string, RsvpSummary> = {};
+  const ids = [...new Set(activityIds)];
+  if (ids.length === 0) return out;
+  const marks = ids.map(() => "?").join(",");
+  const acts = await env.DB.prepare(`SELECT id, member_id, audience FROM activities WHERE group_id = ? AND id IN (${marks})`)
+    .bind(ctx.group.id, ...ids)
+    .all<{ id: string; member_id: string; audience: string | null }>();
+  const rows = await env.DB.prepare(
+    `SELECT r.activity_id, r.member_id, r.status, m.nickname FROM rsvps r JOIN members m ON m.id = r.member_id
+      WHERE r.activity_id IN (${marks}) ORDER BY r.at`,
+  )
+    .bind(...ids)
+    .all<{ activity_id: string; member_id: string; status: RsvpStatus; nickname: string }>();
+  for (const a of acts.results) {
+    let canReply = true;
+    if (a.audience && a.member_id !== ctx.member.id) {
+      try { const list = JSON.parse(a.audience); canReply = Array.isArray(list) && list.includes(ctx.member.id); } catch { canReply = false; }
+    }
+    out[a.id] = { in: [], out: [], mine: null, canReply };
+  }
+  for (const r of rows.results) {
+    const s = out[r.activity_id];
+    if (!s || !s.canReply) continue; // a plan not sent to you shows neither its text nor who's in
+    (r.status === "in" ? s.in : s.out).push(r.nickname);
+    if (r.member_id === ctx.member.id) s.mine = r.status;
+  }
+  return out;
 }

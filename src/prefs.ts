@@ -25,7 +25,7 @@ export async function getPrefs(env: Env, ctx: AuthContext): Promise<PrefsView> {
     wakeupsEnabled: row.wakeups_enabled === 1,
     wakeupsMutedUntil: live(row.wakeups_muted_until),
     activitiesMutedUntil: live(row.activities_muted_until),
-    kinds: { breakfast: row.breakfast === 1, lunch: row.lunch === 1, snacks: row.snacks === 1, sutta: row.sutta === 1, campus: row.campus === 1 },
+    kinds: { breakfast: row.breakfast === 1, lunch: row.lunch === 1, snacks: row.snacks === 1, dinner: row.dinner === 1, sutta: row.sutta === 1, campus: row.campus === 1 },
     mutes: mutes.results.map((m) => ({ memberId: m.muted_member_id, scope: m.scope })),
   };
 }
@@ -55,11 +55,11 @@ export async function savePrefs(env: Env, ctx: AuthContext, b: Record<string, un
 
   const stmts = [
     env.DB.prepare(
-      `INSERT INTO prefs (member_id, wakeups_enabled, wakeups_muted_until, activities_muted_until, breakfast, lunch, snacks, sutta, campus)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO prefs (member_id, wakeups_enabled, wakeups_muted_until, activities_muted_until, breakfast, lunch, snacks, dinner, sutta, campus)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(member_id) DO UPDATE SET wakeups_enabled = excluded.wakeups_enabled, wakeups_muted_until = excluded.wakeups_muted_until,
          activities_muted_until = excluded.activities_muted_until, breakfast = excluded.breakfast, lunch = excluded.lunch,
-         snacks = excluded.snacks, sutta = excluded.sutta, campus = excluded.campus`,
+         snacks = excluded.snacks, dinner = excluded.dinner, sutta = excluded.sutta, campus = excluded.campus`,
     ).bind(
       ctx.member.id,
       flag(b.wakeupsEnabled, true),
@@ -68,6 +68,7 @@ export async function savePrefs(env: Env, ctx: AuthContext, b: Record<string, un
       flag(kindsIn.breakfast, true),
       flag(kindsIn.lunch, true),
       flag(kindsIn.snacks, true),
+      flag(kindsIn.dinner, true),
       flag(kindsIn.sutta, true),
       flag(kindsIn.campus, true),
     ),

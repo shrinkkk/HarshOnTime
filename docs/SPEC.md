@@ -71,9 +71,10 @@ subscriptions id, member_id, endpoint (unique), p256dh, auth, platform, created_
 wakeups       id, group_id, requester_id, wake_at, note, status
               (upcoming | claimed | awake | expired), claimed_by, claimed_at, awake_at,
               reminder_sent_at, created_at
-activities    id, group_id, member_id, kind (breakfast|lunch|snacks|sutta|campus), created_at
+activities    id, group_id, member_id, kind (breakfast|lunch|snacks|dinner|sutta|campus|custom), text, audience, created_at
+rsvps         activity_id, member_id, status (in|out), at
 prefs         member_id, wakeups_enabled, wakeups_muted_until, activities_muted_until,
-              breakfast, lunch, snacks, sutta, campus (booleans)
+              breakfast, lunch, snacks, dinner, sutta, campus (booleans)
 mutes         member_id, muted_member_id, scope (wakeups | activities)
 events        id, group_id, kind, actor_id, subject_id, text, created_at   -- "recent activity" feed
 ```
@@ -97,11 +98,11 @@ Statuses shown in UI: Upcoming / 🔴 Unclaimed (upcoming with no claimer, once 
 - Expiry: cron marks expired 30 min after wake_at if not awake.
 
 ### Activities
-- Five buttons: Breakfast, Lunch, Snacks, Sutta, Campus. Tap → confirm sheet → push others
+- Six buttons: Breakfast, Lunch, Snacks, Dinner, Sutta, Campus. Tap → confirm sheet → push others
   "Arjun wants to go for lunch" (exact wording: "X wants to go for <kind>"). Rate limit: one per kind per member per 10 min.
 - A free-text "custom plan" box sends anything the person types ("Shri: Rooftop in 10"), ≤120 chars, one per 2 min. Custom plans ignore the per-kind switches but respect mute-until and per-person mutes.
 - Both wake-ups and plans offer "send to everyone" or "send to specific people" (a checklist of members). A targeted send stores its audience (`wakeups.audience`, JSON ids); all follow-up pushes for that wake-up (reminder, claim, awake) go only to that audience plus the requester/claimer. The feed shows that a targeted plan was sent and to whom, not its text.
-- No RSVP/scheduling. Appears in the recent-activity feed.
+- Every plan in the feed has In / Out buttons (for the people it was sent to; the sender is In automatically). Under the plan: "In: a, b, c · Out: d". Tapping your current answer clears it. No pushes for replies.
 
 ### Notification preferences (all enforced server-side when computing recipients)
 - Wake-ups: on/off; mute until (1 h, until tomorrow 8 AM, custom); mute specific people.
