@@ -59,12 +59,28 @@
   // ---- Welcome / create / join ----
   let pendingToken = "";
 
+  let creatorAnswer = ""; // kept only in memory, sent again with the create call
+
   function showStartChoices() {
     $("joinPreview").hidden = true; $("joinInvalid").hidden = true; $("startChoices").hidden = false;
-    $("createForm").hidden = true; $("joinCodeForm").hidden = true;
+    $("creatorGate").hidden = true; $("createForm").hidden = true; $("joinCodeForm").hidden = true;
   }
-  $("showCreateBtn").addEventListener("click", () => { $("createForm").hidden = false; $("joinCodeForm").hidden = true; });
-  $("showJoinBtn").addEventListener("click", () => { $("joinCodeForm").hidden = false; $("createForm").hidden = true; });
+  $("showCreateBtn").addEventListener("click", () => { $("creatorGate").hidden = false; $("createForm").hidden = true; $("joinCodeForm").hidden = true; });
+  $("showJoinBtn").addEventListener("click", () => { $("joinCodeForm").hidden = false; $("creatorGate").hidden = true; $("createForm").hidden = true; });
+
+  $("creatorCheckBtn").addEventListener("click", async () => {
+    const answer = $("creatorAnswer").value.trim();
+    if (!answer) return say($("creatorMsg"), "You have to actually say it.", "bad");
+    $("creatorCheckBtn").disabled = true;
+    try {
+      await api("/api/groups/check", { method: "POST", body: JSON.stringify({ answer }) });
+      creatorAnswer = answer;
+      say($("creatorMsg"), "Correct. Obviously.", "ok");
+      $("createForm").hidden = false;
+      $("createGroupName").focus();
+    } catch (e) { say($("creatorMsg"), e.message, "bad"); }
+    $("creatorCheckBtn").disabled = false;
+  });
   $("startOverBtn").addEventListener("click", () => { history.replaceState(null, "", "/"); showStartChoices(); });
   $("notMeBtn").addEventListener("click", () => { history.replaceState(null, "", "/"); showStartChoices(); });
 
@@ -75,7 +91,7 @@
     if (nick.length < 2) return say($("createMsg"), "Nicknames are 2-20 characters.", "bad");
     $("createBtn").disabled = true;
     try {
-      const out = await api("/api/groups", { method: "POST", body: JSON.stringify({ groupName: groupNameVal, nickname: nick }) });
+      const out = await api("/api/groups", { method: "POST", body: JSON.stringify({ groupName: groupNameVal, nickname: nick, answer: creatorAnswer }) });
       setIdentity(out);
       route();
     } catch (e) { say($("createMsg"), e.message, "bad"); }

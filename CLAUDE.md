@@ -18,7 +18,7 @@ before starting any phase.
 - `npx wrangler tail` — live logs from the deployed Worker
 
 ## Hard rules
-- Never commit secrets. `.dev.vars` and `.wrangler` are git-ignored; VAPID private key and passphrases go in only via `wrangler secret put`.
+- Never commit secrets. `.dev.vars` and `.wrangler` are git-ignored; VAPID private key and passphrases (including `CREATE_GROUP_ANSWERS`) go in only via `wrangler secret put`.
 - Do not change `name` in `wrangler.toml` or the workers.dev subdomain: push subscriptions are tied to the URL.
 - Do not change the VAPID key pair once real phones are subscribed.
 - No accounts, logins, emails, phone numbers, analytics or third-party scripts. Identity is a per-device secret (see SPEC).

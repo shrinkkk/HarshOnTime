@@ -7,6 +7,8 @@ export interface Env {
   VAPID_PUBLIC_KEY: string;
   VAPID_SUBJECT: string;
   VAPID_PRIVATE_JWK: string;
+  /** Comma-separated accepted answers to the "are you Shri?" question that gates group creation. Secret. */
+  CREATE_GROUP_ANSWERS?: string;
 }
 
 export interface GroupRow {
@@ -76,6 +78,21 @@ export function normalizeToken(raw: string): string {
 
 export function formatTokenForDisplay(token: string): string {
   return token.match(/.{1,4}/g)?.join("-") ?? token;
+}
+
+/**
+ * Only Shri creates groups for now. The accepted answers live in a Worker secret, never in the repo,
+ * and are compared by digest so timing doesn't leak them. Missing secret = nobody can create.
+ */
+export async function creatorAnswerOk(env: Env, answer: unknown): Promise<boolean> {
+  if (typeof answer !== "string" || !env.CREATE_GROUP_ANSWERS) return false;
+  const given = await sha256Hex(answer.trim().toLowerCase());
+  let ok = false;
+  for (const accepted of env.CREATE_GROUP_ANSWERS.split(",")) {
+    const want = await sha256Hex(accepted.trim().toLowerCase());
+    if (want === given) ok = true; // no early return: same work regardless of which entry matches
+  }
+  return ok;
 }
 
 export function validNickname(v: unknown): string | null {

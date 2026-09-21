@@ -25,4 +25,5 @@ VAPID_SUBJECT = "mailto:allmygtrash@gmail.com"
 
 # Secrets (set with `wrangler secret put`, never committed):
 #   VAPID_PRIVATE_JWK  - private half of the VAPID pair, as JSON
-#   SPIKE_KEY          - passphrase the nine of you type once to use the spike
+#   SPIKE_KEY          - passphrase the nine of you type once to use the spike (Phase 0 only; can be deleted)
+#   CREATE_GROUP_ANSWERS - comma-separated answers to the "are you Shri?" question that gates group creation

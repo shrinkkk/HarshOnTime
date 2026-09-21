@@ -42,7 +42,10 @@ Unknowns still unverified (design so the answer doesn't matter):
 
 ## 3. Identity and security model
 
-- **Create group**: server creates the group and the creator's member row.
+- **Create group**: server creates the group and the creator's member row. For now only Shri may create
+  one: the client asks "what's the name of the love of your life?" and the server accepts the answer
+  only if it matches (case-insensitively) an entry in the `CREATE_GROUP_ANSWERS` secret. Checked on
+  both the pre-check call and the create call; with the secret unset, nobody can create.
 - **Invite**: random ≥128-bit token, expires after 48 h, revocable, rejected once the group has 9
   members. Shared as a link (`/join#<token>`), short code, or QR. Any member can create an invite.
 - **Join**: person enters a nickname (unique within group, 2–20 chars). Server issues a member id and a

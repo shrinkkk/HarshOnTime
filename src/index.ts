@@ -3,6 +3,7 @@ import {
   authenticate,
   createGroup,
   createInvite,
+  creatorAnswerOk,
   formatTokenForDisplay,
   joinGroup,
   memberView,
@@ -20,8 +21,19 @@ const bad = (message: string, status = 400) => json({ error: message }, status);
 async function handleApi(req: Request, env: Env, path: string): Promise<Response> {
   // ---- Unauthenticated: creating and previewing/using an invite happen before a device has a secret. ----
 
+  const WRONG_ANSWER = "Nope. Nice try though.";
+
+  // Step one of creating a group: prove you're Shri before the form even appears.
+  if (path === "/api/groups/check" && req.method === "POST") {
+    const b = (await req.json().catch(() => ({}))) as { answer?: string };
+    if (!(await creatorAnswerOk(env, b.answer))) return bad(WRONG_ANSWER, 403);
+    return json({ ok: true });
+  }
+
   if (path === "/api/groups" && req.method === "POST") {
-    const b = (await req.json().catch(() => ({}))) as { groupName?: string; nickname?: string };
+    const b = (await req.json().catch(() => ({}))) as { groupName?: string; nickname?: string; answer?: string };
+    // Checked again here: the /check call only gates the UI, this is what actually protects creation.
+    if (!(await creatorAnswerOk(env, b.answer))) return bad(WRONG_ANSWER, 403);
     const groupName = typeof b.groupName === "string" ? b.groupName.trim().slice(0, 40) : "";
     const nickname = validNickname(b.nickname);
     if (!groupName) return bad("Give the group a name.");

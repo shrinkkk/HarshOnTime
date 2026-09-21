@@ -91,6 +91,16 @@
     <div id="startChoices">
       <div class="row"><button id="showCreateBtn">Create a new group</button><button id="showJoinBtn" class="quiet">I have an invite code</button></div>
 
+      <div id="creatorGate" hidden style="margin-top:14px">
+        <h2>Hold on</h2>
+        <p>Only Shri can create groups lol. Are you Shri? Prove it: what's the name of the love of your life?</p>
+        <div class="row">
+          <input id="creatorAnswer" maxlength="40" autocomplete="off" autocapitalize="none" placeholder="Go on, say it" aria-label="Name of the love of your life">
+          <button id="creatorCheckBtn">That's me</button>
+        </div>
+        <p id="creatorMsg" class="msg" hidden></p>
+      </div>
+
       <div id="createForm" hidden style="margin-top:14px">
         <h2>Create a group</h2>
         <div class="row">
