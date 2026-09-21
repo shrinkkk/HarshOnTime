@@ -11,7 +11,7 @@ binding = "ASSETS"
 [[d1_databases]]
 binding = "DB"
 database_name = "harshontime"
-database_id = "REPLACE_WITH_ID_FROM_wrangler_d1_create"
+database_id = "61712eb8-5e3f-4e72-a72f-42d847831b4b"
 migrations_dir = "migrations"
 
 [triggers]
@@ -19,9 +19,9 @@ crons = ["* * * * *"]
 
 [vars]
 # Public half of the VAPID pair (safe to expose). Filled in from `npm run vapid`.
-VAPID_PUBLIC_KEY = "REPLACE_WITH_PUBLIC_KEY"
+VAPID_PUBLIC_KEY = "BCkTGh1igZ0XcpYqTFB3bOoHZI57e7aoimC2gPHT1UMFjct_9p7CkjBCqF58qcCoJvO5I9T-JQFQ2hhaV5WEOJo"
 # Apple rejects malformed subjects. Use a real address in exactly this form.
-VAPID_SUBJECT = "mailto:REPLACE_ME@example.com"
+VAPID_SUBJECT = "mailto:allmygtrash@gmail.com"
 
 # Secrets (set with `wrangler secret put`, never committed):
 #   VAPID_PRIVATE_JWK  - private half of the VAPID pair, as JSON
