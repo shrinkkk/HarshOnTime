@@ -21,7 +21,7 @@ const bad = (message: string, status = 400) => json({ error: message }, status);
 async function handleApi(req: Request, env: Env, path: string): Promise<Response> {
   // ---- Unauthenticated: creating and previewing/using an invite happen before a device has a secret. ----
 
-  const WRONG_ANSWER = "Nope. Nice try though.";
+  const WRONG_ANSWER = "fuck off :P";
 
   // Step one of creating a group: prove you're Shri before the form even appears.
   if (path === "/api/groups/check" && req.method === "POST") {
