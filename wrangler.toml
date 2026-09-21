@@ -1,0 +1,28 @@
+# IMPORTANT: "name" becomes part of the URL (https://<name>.<your-subdomain>.workers.dev).
+# Push subscriptions are tied to that URL, so settle on the name before anyone installs the app.
+name = "harshontime"
+main = "src/index.ts"
+compatibility_date = "2026-01-01"
+
+[assets]
+directory = "./public"
+binding = "ASSETS"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "harshontime"
+database_id = "REPLACE_WITH_ID_FROM_wrangler_d1_create"
+migrations_dir = "migrations"
+
+[triggers]
+crons = ["* * * * *"]
+
+[vars]
+# Public half of the VAPID pair (safe to expose). Filled in from `npm run vapid`.
+VAPID_PUBLIC_KEY = "REPLACE_WITH_PUBLIC_KEY"
+# Apple rejects malformed subjects. Use a real address in exactly this form.
+VAPID_SUBJECT = "mailto:REPLACE_ME@example.com"
+
+# Secrets (set with `wrangler secret put`, never committed):
+#   VAPID_PRIVATE_JWK  - private half of the VAPID pair, as JSON
+#   SPIKE_KEY          - passphrase the nine of you type once to use the spike

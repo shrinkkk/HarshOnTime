@@ -1,0 +1,25 @@
+{
+  "name": "harshontime",
+  "version": "1.0.0",
+  "description": "",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "test": "node --experimental-strip-types --no-warnings test/webpush.test.mjs",
+    "typecheck": "tsc",
+    "vapid": "node scripts/generate-vapid.mjs",
+    "db:local": "wrangler d1 migrations apply harshontime --local",
+    "db:remote": "wrangler d1 migrations apply harshontime --remote"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260921.1",
+    "http_ece": "^1.2.1",
+    "typescript": "^7.0.2",
+    "wrangler": "^4.136.1"
+  },
+  "private": true,
+  "type": "module"
+}
