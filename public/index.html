@@ -54,6 +54,28 @@
   .tabbar button { flex: 1; }
   footer.groupfoot { text-align: center; margin-top: 18px; }
   footer.groupfoot a { color: var(--muted); font-size: 14px; }
+  .wake { border: 1px solid var(--line); border-radius: 16px; padding: 12px; margin-top: 10px; }
+  .wake.mine { border-color: var(--sun); }
+  .wake.flash { box-shadow: 0 0 0 3px var(--sun); }
+  .wake .top { display: flex; align-items: baseline; gap: 10px; }
+  .wake .time { font-size: 26px; font-weight: 800; letter-spacing: -0.02em; }
+  .wake .day { color: var(--muted); font-size: 13px; }
+  .wake .who { margin-left: auto; font-weight: 600; }
+  .wake .note { color: var(--muted); font-size: 14px; margin-top: 2px; }
+  .wake .status { font-size: 14px; margin-top: 6px; font-weight: 600; }
+  .wake .status.red { color: var(--bad); } .wake .status.green { color: var(--ok); } .wake .status.grey { color: var(--muted); font-weight: 500; }
+  .wake .row { margin-top: 8px; }
+  .wake button.big { min-height: 56px; font-size: 17px; }
+  .sheet { background: var(--sky); border-radius: 14px; padding: 12px; margin-top: 10px; }
+  .sheet p { margin: 0 0 4px; font-weight: 600; }
+  .list .item .meta { display: block; color: var(--muted); font-size: 12px; font-weight: 500; }
+  .list .item .meta.bad { color: var(--bad); } .list .item .meta.ok { color: var(--ok); }
+  .list .item .when { color: var(--muted); font-size: 12px; white-space: nowrap; }
+  label.tog { display: flex; align-items: center; gap: 10px; padding: 8px 0; font-size: 15px; }
+  label.tog input { width: 22px; height: 22px; min-height: 0; margin: 0; accent-color: var(--sun); }
+  label.field { display: block; margin-top: 8px; font-size: 14px; color: var(--muted); }
+  label.field select { margin-top: 4px; color: var(--ink); }
+  .checks { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
   [hidden] { display: none !important; }
 </style>
 </head>
@@ -128,32 +150,55 @@
       <p id="homeSub">9-person crew</p>
     </header>
 
+    <section id="notifNudge" hidden>
+      <h2>Turn on notifications</h2>
+      <p class="muted" id="notifNudgeText">Without them nobody can wake you and you won't hear about plans.</p>
+      <div class="row"><button id="enablePushBtn">Turn on notifications</button></div>
+      <p id="notifNudgeMsg" class="msg" hidden></p>
+    </section>
+
     <section>
-      <h2>Upcoming Wake-Ups</h2>
-      <p class="muted">Coming soon — wake-up requests arrive in the next update.</p>
+      <h2>Upcoming Wake-Ups <span class="sub" id="wakeSub"></span></h2>
+      <div id="wakeList"></div>
+      <p id="wakeEmpty" class="muted">No wake-ups yet. Ask for one.</p>
+      <div class="row"><button id="askWakeBtn">Ask for a wake-up</button></div>
+      <div id="wakeForm" hidden>
+        <div class="row two">
+          <select id="wakeDay" aria-label="Day"><option value="today">Today</option><option value="tomorrow">Tomorrow</option></select>
+          <input id="wakeTime" type="time" step="300" aria-label="Time">
+        </div>
+        <div class="row"><input id="wakeNote" maxlength="200" placeholder="Note (optional) — e.g. 8 AM exam, be brutal"></div>
+        <div class="row two"><button id="wakeCreateBtn">Ask the group</button><button id="wakeFormCloseBtn" class="quiet">Never mind</button></div>
+        <p id="wakeMsg" class="msg" hidden></p>
+      </div>
     </section>
 
     <section>
       <h2>Quick Group Actions</h2>
-      <div class="grid5">
-        <button disabled title="Coming soon">Breakfast</button>
-        <button disabled title="Coming soon">Lunch</button>
-        <button disabled title="Coming soon">Snacks</button>
-        <button disabled title="Coming soon">Sutta</button>
-        <button disabled title="Coming soon">Campus</button>
+      <div class="grid5" id="actGrid">
+        <button data-kind="breakfast">Breakfast</button>
+        <button data-kind="lunch">Lunch</button>
+        <button data-kind="snacks">Snacks</button>
+        <button data-kind="sutta">Sutta</button>
+        <button data-kind="campus">Campus</button>
       </div>
-      <p class="muted" style="margin-top:8px">Coming soon.</p>
+      <div id="actConfirm" class="sheet" hidden>
+        <p id="actConfirmText"></p>
+        <div class="row two"><button id="actSendBtn">Send it</button><button id="actCancelBtn" class="quiet">Cancel</button></div>
+      </div>
+      <p id="actMsg" class="msg" hidden></p>
     </section>
 
     <section>
       <h2>Recent Activity</h2>
-      <p class="muted">Nothing yet. Ask for a wake-up or invite the rest of the group.</p>
+      <div id="feed" class="list"></div>
+      <p id="feedEmpty" class="muted">Nothing yet. Ask for a wake-up or invite the rest of the group.</p>
     </section>
 
     <section>
       <h2>Group <span class="sub" id="memberCount"></span></h2>
       <div id="homeMembers" class="list"></div>
-      <div class="row"><button id="inviteBtn">Invite a friend</button></div>
+      <div class="row"><button id="inviteBtn" class="quiet">Invite a friend</button></div>
       <div id="inviteResult" hidden>
         <div class="codebox" id="inviteCode"></div>
         <div class="linkbox" id="inviteLink"></div>
@@ -173,15 +218,58 @@
       <h1>Settings</h1>
       <p id="settingsSub"></p>
     </header>
+
+    <section>
+      <h2>Notifications on this device</h2>
+      <p id="pushStatus" class="muted"></p>
+      <div class="row two">
+        <button id="enablePushBtn2" class="quiet">Turn on</button>
+        <button id="testPushBtn" class="quiet">Send me a test push</button>
+      </div>
+      <p id="pushMsg" class="msg" hidden></p>
+    </section>
+
+    <section>
+      <h2>Wake-up alerts</h2>
+      <label class="tog"><input type="checkbox" id="pWakeOn"> Tell me when someone needs waking</label>
+      <label class="field">Mute wake-ups
+        <select id="pWakeMute"></select>
+      </label>
+      <input type="datetime-local" id="pWakeMuteCustom" aria-label="Mute wake-ups until" hidden>
+      <p class="muted" style="margin-top:10px">Don't wake me for these people:</p>
+      <div id="pWakeMutes" class="checks"></div>
+    </section>
+
+    <section>
+      <h2>Plan alerts</h2>
+      <div class="checks" id="pKinds">
+        <label class="tog"><input type="checkbox" data-kind="breakfast"> Breakfast</label>
+        <label class="tog"><input type="checkbox" data-kind="lunch"> Lunch</label>
+        <label class="tog"><input type="checkbox" data-kind="snacks"> Snacks</label>
+        <label class="tog"><input type="checkbox" data-kind="sutta"> Sutta</label>
+        <label class="tog"><input type="checkbox" data-kind="campus"> Campus</label>
+      </div>
+      <label class="field">Mute plans
+        <select id="pActMute"></select>
+      </label>
+      <input type="datetime-local" id="pActMuteCustom" aria-label="Mute plans until" hidden>
+      <p class="muted" style="margin-top:10px">Ignore plans from these people:</p>
+      <div id="pActMutes" class="checks"></div>
+    </section>
+
+    <div class="row"><button id="savePrefsBtn">Save preferences</button></div>
+    <p id="prefsMsg" class="msg" hidden></p>
+
+    <section>
+      <h2>Members</h2>
+      <div id="settingsMembers" class="list"></div>
+    </section>
+
     <section>
       <h2>This device</h2>
       <p>You're <strong id="settingsNickname"></strong> in <strong id="settingsGroupName"></strong>.</p>
       <div class="row"><button id="leaveBtn" class="danger">Leave this group</button></div>
       <p id="leaveMsg" class="msg" hidden></p>
-    </section>
-    <section>
-      <h2>Members</h2>
-      <div id="settingsMembers" class="list"></div>
     </section>
     <footer class="groupfoot"><a href="#" id="backHomeLink">Back to home</a></footer>
   </div>

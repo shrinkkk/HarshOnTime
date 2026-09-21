@@ -92,7 +92,8 @@ Statuses shown in UI: Upcoming / 🔴 Unclaimed (upcoming with no claimer, once 
 - Claim: `UPDATE wakeups SET claimed_by=?, claimed_at=?, status='claimed' WHERE id=? AND group_id=? AND claimed_by IS NULL AND status='upcoming'`; require `changes === 1`, else respond "X already has it". Push everyone else "Arjun is waking Rahul".
 - Awake: requester only; sets status awake; push everyone "Rahul is awake".
 - Nobody claims: leave it Unclaimed, no escalation, no auto-assign.
-- Cancel: requester may cancel before wake_at; push the claimer if any.
+- Cancel: requester may cancel before wake_at (status becomes `cancelled`, hidden from the list); push the claimer if any.
+- One pending wake-up per requester at a time.
 - Expiry: cron marks expired 30 min after wake_at if not awake.
 
 ### Activities
@@ -116,7 +117,7 @@ Sections in this order: Upcoming Wake-Ups (large, with status line), Quick Group
 (five buttons, two rows), Recent Activity (last ~20 events), then a small footer with group health and
 a link to Settings. Empty states invite action ("No wake-ups yet. Ask for one.").
 
-## 6. Phases (build in this order, one commit per completed step)
+## 6. Phases (build in this order, one commit per completed step) — 1 to 5 done, 6 remaining
 
 1. **Foundation**: new schema + migration 0002 (drop spike tables), identity middleware, create group,
    invite (link + code + QR via a small inline generator or plain text fallback), join (iOS standalone

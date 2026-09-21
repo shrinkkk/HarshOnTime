@@ -6,14 +6,19 @@ paid nothing. Full requirements, approved decisions and the build plan are in `d
 before starting any phase.
 
 ## Current state
-- Phase 0 (push spike) is deployed and verified on one Android phone. iOS and the group are untested.
-- Phase 1 onward is not started. The spike code in `src/index.ts` and `migrations/0001_spike.sql`
-  is throwaway and gets replaced; `src/webpush.ts`, `public/sw.js` patterns, icons and manifest carry forward.
+- Phases 1-5 are built and smoke-tested locally: identity, invites, push plumbing (subscribe on open,
+  test push, health row, receipts, dead-subscription cleanup), wake-ups (create/claim/awake/cancel,
+  cron reminders and expiry), activities, and preferences/mutes (enforced in `src/push.ts recipients()`).
+- Not yet done: Phase 6 polish and the real-device test matrix. Push fan-out CPU has not been measured
+  on the deployed Worker. iOS is untested.
+- Module map: `src/identity.ts` (auth, groups, invites), `src/push.ts` (recipients, fan-out, subscriptions),
+  `src/wakeups.ts`, `src/activities.ts`, `src/prefs.ts`, `src/common.ts` (feed events, IST time formatting),
+  `src/index.ts` (routes + cron). Client is `public/app.js` + `public/index.html` + `public/sw.js`; `public/_headers` sets the CSP.
 
 ## Commands
 - `npm test` — encryption/VAPID checks (must stay green; Node 22.6+)
 - `npm run typecheck` — `tsc --noEmit`
-- `npm run dev` — local Worker with local D1 (`npm run db:local` first; needs `.dev.vars`)
+- `npm run dev` — local Worker with local D1 (`npm run db:local` first; needs `.dev.vars` with `CREATE_GROUP_ANSWERS` and a `VAPID_PRIVATE_JWK` — a throwaway pair is fine locally). Add `--test-scheduled` and hit `/__scheduled?cron=*+*+*+*+*` to run the cron by hand.
 - `npm run db:remote` / `npm run deploy` — migrate and deploy to Cloudflare
 - `npx wrangler tail` — live logs from the deployed Worker
 
