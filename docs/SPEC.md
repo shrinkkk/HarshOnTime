@@ -103,6 +103,9 @@ Statuses shown in UI: Upcoming / 🔴 Unclaimed (upcoming with no claimer, once 
 - A free-text "custom plan" box sends anything the person types ("Shri: Rooftop in 10"), ≤120 chars, one per 2 min. Custom plans ignore the per-kind switches but respect mute-until and per-person mutes.
 - Both wake-ups and plans offer "send to everyone" or "send to specific people" (a checklist of members). A targeted send stores its audience (`wakeups.audience`, JSON ids); all follow-up pushes for that wake-up (reminder, claim, awake) go only to that audience plus the requester/claimer. The feed shows that a targeted plan was sent and to whom, not its text.
 - A "Send a message" box at the top of Home (≤200 chars) works like a custom plan (everyone / specific people) but has no In/Out and is not a plan. Feed kind `message`.
+- The feed shows the last 24 h only (7 entries, "Show more" for the rest); the cron deletes events, activities and rsvps older than a day.
+- A plan's creator sees a "Cancel plan" button (inline confirm). Cancelled plans lose In/Out and show "Plan cancelled"; people who had said In get a push.
+- When someone new says In, the creator gets "X is in for lunch" / "X is in for “text”".
 - Every plan in the feed has In / Out buttons (for the people it was sent to; the sender is In automatically). Under the plan: "In: a, b, c · Out: d". Tapping your current answer clears it. No pushes for replies.
 
 ### Notification preferences (all enforced server-side when computing recipients)

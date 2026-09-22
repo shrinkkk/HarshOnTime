@@ -1,5 +1,5 @@
-import { createActivity, rsvpSummaries, setRsvp } from "./activities";
-import type { Defer } from "./common";
+import { cancelActivity, createActivity, rsvpSummaries, setRsvp } from "./activities";
+import { type Defer, FEED_RETENTION_MS, pruneOldFeed } from "./common";
 import {
   type Env,
   type MemberRow,
@@ -108,8 +108,10 @@ async function handleApi(req: Request, env: Env, path: string, defer: Defer): Pr
       now: Date.now(),
     };
     if (path === "/api/home") {
-      const events = await env.DB.prepare("SELECT id, kind, actor_id, text, ref_id, created_at FROM events WHERE group_id = ? ORDER BY created_at DESC LIMIT 20")
-        .bind(ctx.group.id)
+      const events = await env.DB.prepare(
+        "SELECT id, kind, actor_id, text, ref_id, created_at FROM events WHERE group_id = ? AND created_at > ? ORDER BY created_at DESC LIMIT 100",
+      )
+        .bind(ctx.group.id, Date.now() - FEED_RETENTION_MS)
         .all<{ id: string; kind: string; actor_id: string | null; text: string; ref_id: string | null; created_at: number }>();
       const planIds = events.results.filter((e) => e.kind.startsWith("activity.") && e.ref_id).map((e) => e.ref_id as string);
       const rsvps = await rsvpSummaries(env, ctx, planIds);
@@ -176,8 +178,10 @@ async function handleApi(req: Request, env: Env, path: string, defer: Defer): Pr
     const b = await body(req);
     const status = b.status === "in" || b.status === "out" ? b.status : b.status === null ? null : undefined;
     if (status === undefined) return bad("Say in or out.");
-    return json(await setRsvp(env, ctx, decodeURIComponent(rsvpMatch[1]), status));
+    return json(await setRsvp(env, ctx, decodeURIComponent(rsvpMatch[1]), status, defer));
   }
+  const cancelPlanMatch = /^\/api\/activities\/([^/]+)\/cancel$/.exec(path);
+  if (cancelPlanMatch && req.method === "POST") return json(await cancelActivity(env, ctx, decodeURIComponent(cancelPlanMatch[1]), defer));
 
   // ---- Preferences ----
   if (path === "/api/prefs" && req.method === "GET") return json(await getPrefs(env, ctx));
@@ -202,6 +206,6 @@ export default {
   },
 
   async scheduled(_event: ScheduledController, env: Env, exec: ExecutionContext): Promise<void> {
-    exec.waitUntil(runWakeupCron(env));
+    exec.waitUntil(runWakeupCron(env).then(() => pruneOldFeed(env)));
   },
 } satisfies ExportedHandler<Env>;

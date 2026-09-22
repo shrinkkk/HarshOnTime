@@ -28,5 +28,17 @@ export async function logEvent(
     .run();
 }
 
+export const FEED_RETENTION_MS = 24 * 60 * 60 * 1000;
+
+/** The feed only ever shows the last day. Run from the cron; deletes are idempotent. */
+export async function pruneOldFeed(env: Env): Promise<void> {
+  const cutoff = Date.now() - FEED_RETENTION_MS;
+  await env.DB.batch([
+    env.DB.prepare("DELETE FROM events WHERE created_at < ?").bind(cutoff),
+    env.DB.prepare("DELETE FROM rsvps WHERE activity_id IN (SELECT id FROM activities WHERE created_at < ?)").bind(cutoff),
+    env.DB.prepare("DELETE FROM activities WHERE created_at < ?").bind(cutoff),
+  ]);
+}
+
 /** Something to run after the response is sent (ctx.waitUntil). Pushes always go through this. */
 export type Defer = (work: Promise<unknown>) => void;

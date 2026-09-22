@@ -93,6 +93,9 @@
   .feeditem .rsvp button.on.out { background: var(--line); border-color: var(--line); color: var(--ink); }
   .feeditem .who { font-size: 13px; color: var(--muted); margin-top: 4px; }
   .feeditem .who b { color: var(--ok); font-weight: 600; }
+  .feeditem .rsvp .spacer { flex: 1; }
+  .feeditem .rsvp button.danger { font-weight: 600; }
+  .feeditem .cancelled { color: var(--bad); font-size: 13px; font-weight: 600; margin-top: 4px; }
   [hidden] { display: none !important; }
 </style>
 </head>
@@ -232,6 +235,8 @@
       <h2>Recent Activity</h2>
       <div id="feed" class="list"></div>
       <p id="feedEmpty" class="muted">Nothing yet. Ask for a wake-up or invite the rest of the group.</p>
+      <div class="row"><button id="feedMoreBtn" class="quiet" hidden>Show more</button></div>
+      <p class="muted" style="margin-top:8px;font-size:12px">Activity clears after a day.</p>
     </section>
 
     <section>

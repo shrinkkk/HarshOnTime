@@ -299,15 +299,24 @@
     }
   }
 
+  const FEED_PREVIEW = 7;
+  let feedExpanded = false;
+  $("feedMoreBtn").addEventListener("click", () => { feedExpanded = !feedExpanded; renderFeed(home ? home.events || [] : []); });
+
   function renderFeed(events) {
     const box = $("feed"); box.textContent = "";
     $("feedEmpty").hidden = events.length > 0;
-    for (const e of events) {
+    const shown = feedExpanded ? events : events.slice(0, FEED_PREVIEW);
+    $("feedMoreBtn").hidden = events.length <= FEED_PREVIEW;
+    $("feedMoreBtn").textContent = feedExpanded ? "Show less" : "Show " + (events.length - FEED_PREVIEW) + " more";
+    for (const e of shown) {
       const item = el("div", "feeditem");
       const line = el("div", "line"); line.append(el("span", "text", e.text), el("span", "when", ago(e.at))); item.append(line);
       if (e.plan) {
         const p = e.plan;
-        if (p.canReply) {
+        if (p.cancelled) {
+          item.append(el("div", "cancelled", "Plan cancelled"));
+        } else if (p.canReply) {
           const row = el("div", "rsvp");
           const mk = (status, label) => {
             const b = el("button", "quiet" + (p.mine === status ? " on " + status : ""), label);
@@ -321,9 +330,29 @@
             return b;
           };
           row.append(mk("in", "In"), mk("out", "Out"));
+          if (p.isCreator) {
+            row.append(el("span", "spacer"));
+            const cancel = el("button", "danger", "Cancel plan");
+            cancel.addEventListener("click", () => {
+              // Inline confirmation in place of the buttons.
+              row.textContent = "";
+              row.append(el("span", "text", "Cancel this plan?"));
+              const yes = el("button", "danger", "Yes, cancel");
+              const no = el("button", "quiet", "Keep it");
+              yes.addEventListener("click", async () => {
+                yes.disabled = true; no.disabled = true;
+                try { await api("/api/activities/" + encodeURIComponent(p.id) + "/cancel", { method: "POST" }); }
+                catch (err) { alert(err.message); }
+                loadHome();
+              });
+              no.addEventListener("click", () => renderFeed(home ? home.events || [] : []));
+              row.append(yes, no);
+            });
+            row.append(cancel);
+          }
           item.append(row);
         }
-        if (p.in.length || p.out.length) {
+        if (!p.cancelled && (p.in.length || p.out.length)) {
           const who = el("div", "who");
           if (p.in.length) { const b = el("b", "", "In: "); who.append(b, document.createTextNode(p.in.join(", "))); }
           if (p.out.length) who.append(document.createTextNode((p.in.length ? "  ·  " : "") + "Out: " + p.out.join(", ")));

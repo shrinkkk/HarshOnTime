@@ -80,11 +80,15 @@ export async function createActivity(env: Env, ctx: AuthContext, kind: ActivityK
 export type RsvpStatus = "in" | "out";
 
 /** Sets, changes, or (status null) clears the caller's in/out on a plan. Only people the plan was sent to may reply. */
-export async function setRsvp(env: Env, ctx: AuthContext, activityId: string, status: RsvpStatus | null) {
-  const a = await env.DB.prepare("SELECT id, member_id, audience FROM activities WHERE id = ? AND group_id = ?")
+export async function setRsvp(env: Env, ctx: AuthContext, activityId: string, status: RsvpStatus | null, defer: Defer) {
+  const a = await env.DB.prepare("SELECT id, member_id, kind, text, audience, cancelled_at FROM activities WHERE id = ? AND group_id = ?")
     .bind(activityId, ctx.group.id)
-    .first<{ id: string; member_id: string; audience: string | null }>();
+    .first<{ id: string; member_id: string; kind: string; text: string | null; audience: string | null; cancelled_at: number | null }>();
   if (!a) throw new UserError("That plan doesn't exist.");
+  if (a.cancelled_at) throw new UserError("This plan was cancelled.");
+  const before = await env.DB.prepare("SELECT status FROM rsvps WHERE activity_id = ? AND member_id = ?")
+    .bind(activityId, ctx.member.id)
+    .first<{ status: RsvpStatus }>();
   if (a.audience) {
     let ids: unknown = [];
     try { ids = JSON.parse(a.audience); } catch {}
@@ -99,6 +103,49 @@ export async function setRsvp(env: Env, ctx: AuthContext, activityId: string, st
       .bind(activityId, ctx.member.id, status, Date.now())
       .run();
   }
+  // The creator hears when someone new says In (not for Out, not for their own plan, not for a repeat tap).
+  if (status === "in" && before?.status !== "in" && a.member_id !== ctx.member.id) {
+    const what = planLabel(a.kind, a.text);
+    defer(
+      pushToMembers(
+        env,
+        [a.member_id],
+        { title: `${ctx.member.nickname} is in for ${what}`, body: "Tap to see who else is coming.", url: "/", tag: `rsvp-${activityId}` },
+        NORMAL,
+      ),
+    );
+  }
+  return { ok: true };
+}
+
+/** "lunch" for a button plan, the quoted text for a custom one. */
+function planLabel(kind: string, text: string | null): string {
+  return kind === "custom" ? `\u201c${text ?? ""}\u201d` : (ACTIVITY_LABEL as Record<string, string>)[kind] ?? kind;
+}
+
+/** Creator-only. Cancelled plans keep their feed line; In/Out goes away. People who had said In are told. */
+export async function cancelActivity(env: Env, ctx: AuthContext, activityId: string, defer: Defer) {
+  const a = await env.DB.prepare("SELECT id, member_id, kind, text, cancelled_at FROM activities WHERE id = ? AND group_id = ?")
+    .bind(activityId, ctx.group.id)
+    .first<{ id: string; member_id: string; kind: string; text: string | null; cancelled_at: number | null }>();
+  if (!a) throw new UserError("That plan doesn't exist.");
+  if (a.member_id !== ctx.member.id) throw new UserError("Only whoever made the plan can cancel it.");
+  if (a.kind === "message") throw new UserError("Messages can't be cancelled.");
+  const r = await env.DB.prepare("UPDATE activities SET cancelled_at = ? WHERE id = ? AND cancelled_at IS NULL").bind(Date.now(), activityId).run();
+  if (r.meta.changes !== 1) return { ok: true }; // already cancelled; nothing more to do
+  const ins = await env.DB.prepare("SELECT member_id FROM rsvps WHERE activity_id = ? AND status = 'in' AND member_id <> ?")
+    .bind(activityId, ctx.member.id)
+    .all<{ member_id: string }>();
+  if (ins.results.length) {
+    defer(
+      pushToMembers(
+        env,
+        ins.results.map((x) => x.member_id),
+        { title: `${ctx.member.nickname} cancelled ${planLabel(a.kind, a.text)}`, body: "Plan's off.", url: "/", tag: `rsvp-${activityId}` },
+        NORMAL,
+      ),
+    );
+  }
   return { ok: true };
 }
 
@@ -107,6 +154,8 @@ export interface RsvpSummary {
   out: string[];
   mine: RsvpStatus | null;
   canReply: boolean;
+  isCreator: boolean;
+  cancelled: boolean;
 }
 
 /** In/out state for a set of plans, as seen by the caller. Keyed by activity id. */
@@ -115,9 +164,9 @@ export async function rsvpSummaries(env: Env, ctx: AuthContext, activityIds: str
   const ids = [...new Set(activityIds)];
   if (ids.length === 0) return out;
   const marks = ids.map(() => "?").join(",");
-  const acts = await env.DB.prepare(`SELECT id, member_id, audience FROM activities WHERE group_id = ? AND id IN (${marks})`)
+  const acts = await env.DB.prepare(`SELECT id, member_id, audience, cancelled_at FROM activities WHERE group_id = ? AND id IN (${marks})`)
     .bind(ctx.group.id, ...ids)
-    .all<{ id: string; member_id: string; audience: string | null }>();
+    .all<{ id: string; member_id: string; audience: string | null; cancelled_at: number | null }>();
   const rows = await env.DB.prepare(
     `SELECT r.activity_id, r.member_id, r.status, m.nickname FROM rsvps r JOIN members m ON m.id = r.member_id
       WHERE r.activity_id IN (${marks}) ORDER BY r.at`,
@@ -129,7 +178,7 @@ export async function rsvpSummaries(env: Env, ctx: AuthContext, activityIds: str
     if (a.audience && a.member_id !== ctx.member.id) {
       try { const list = JSON.parse(a.audience); canReply = Array.isArray(list) && list.includes(ctx.member.id); } catch { canReply = false; }
     }
-    out[a.id] = { in: [], out: [], mine: null, canReply };
+    out[a.id] = { in: [], out: [], mine: null, canReply, isCreator: a.member_id === ctx.member.id, cancelled: a.cancelled_at !== null };
   }
   for (const r of rows.results) {
     const s = out[r.activity_id];
