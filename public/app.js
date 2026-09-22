@@ -444,22 +444,40 @@
   });
   $("customPlanText").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); $("customPlanBtn").click(); } });
   $("actCancelBtn").addEventListener("click", () => { $("actConfirm").hidden = true; });
-  async function sendActivity(toSome) {
+
+  // Shared by the plan sheet and the message sheet: everyone / specific people / never mind.
+  async function sendActivity(ui, toSome) {
     let to = null;
     if (toSome) { to = await openPicker("Send this to who?"); if (!to) return; }
-    $("actSendBtn").disabled = true; $("actSendSomeBtn").disabled = true;
+    ui.sendBtn.disabled = true; ui.someBtn.disabled = true;
     try {
-      await api("/api/activities", { method: "POST", body: JSON.stringify({ kind: pendingKind, text: pendingText, to }) });
-      $("actConfirm").hidden = true;
-      if (pendingKind === "custom") $("customPlanText").value = "";
-      say($("actMsg"), to ? "Sent to " + to.length + (to.length === 1 ? " person." : " people.") : "Sent to everyone.", "ok");
-      setTimeout(() => say($("actMsg"), "", null), 4000);
+      await api("/api/activities", { method: "POST", body: JSON.stringify({ kind: ui.kind(), text: ui.text(), to }) });
+      ui.confirm.hidden = true;
+      if (ui.input) ui.input.value = "";
+      say(ui.msg, to ? "Sent to " + to.length + (to.length === 1 ? " person." : " people.") : "Sent to everyone.", "ok");
+      setTimeout(() => say(ui.msg, "", null), 4000);
       loadHome();
-    } catch (e) { say($("actMsg"), e.message, "bad"); }
-    $("actSendBtn").disabled = false; $("actSendSomeBtn").disabled = false;
+    } catch (e) { say(ui.msg, e.message, "bad"); }
+    ui.sendBtn.disabled = false; ui.someBtn.disabled = false;
   }
-  $("actSendBtn").addEventListener("click", () => sendActivity(false));
-  $("actSendSomeBtn").addEventListener("click", () => sendActivity(true));
+  const planUi = { kind: () => pendingKind, text: () => pendingText, sendBtn: $("actSendBtn"), someBtn: $("actSendSomeBtn"), confirm: $("actConfirm"), msg: $("actMsg"), get input() { return pendingKind === "custom" ? $("customPlanText") : null; } };
+  $("actSendBtn").addEventListener("click", () => sendActivity(planUi, false));
+  $("actSendSomeBtn").addEventListener("click", () => sendActivity(planUi, true));
+
+  // Plain message: same flow, no in/out.
+  let pendingMessage = "";
+  const msgUi = { kind: () => "message", text: () => pendingMessage, sendBtn: $("msgSendBtn"), someBtn: $("msgSendSomeBtn"), confirm: $("msgConfirm"), msg: $("msgMsg"), input: $("msgText") };
+  $("msgBtn").addEventListener("click", () => {
+    const t = $("msgText").value.trim();
+    if (!t) { say($("msgMsg"), "Type something first.", "bad"); $("msgText").focus(); return; }
+    pendingMessage = t;
+    $("msgConfirmText").textContent = "Send \u201c" + t + "\u201d?";
+    $("msgConfirm").hidden = false; say($("msgMsg"), "", null);
+  });
+  $("msgText").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); $("msgBtn").click(); } });
+  $("msgCancelBtn").addEventListener("click", () => { $("msgConfirm").hidden = true; });
+  $("msgSendBtn").addEventListener("click", () => sendActivity(msgUi, false));
+  $("msgSendSomeBtn").addEventListener("click", () => sendActivity(msgUi, true));
 
   $("inviteBtn").addEventListener("click", async () => {
     $("inviteBtn").disabled = true;
@@ -550,7 +568,9 @@
   });
 
   $("settingsLink").addEventListener("click", (e) => { e.preventDefault(); show("screenSettings"); loadSettings(); refreshPush(false); window.scrollTo(0, 0); });
-  $("backHomeLink").addEventListener("click", (e) => { e.preventDefault(); show("screenHome"); loadHome(); window.scrollTo(0, 0); });
+  const goHome = (e) => { e.preventDefault(); show("screenHome"); loadHome(); window.scrollTo(0, 0); };
+  $("backHomeLink").addEventListener("click", goHome);
+  $("backHomeIcon").addEventListener("click", goHome);
 
   // ---- Routing ----
   function route() {

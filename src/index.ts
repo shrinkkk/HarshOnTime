@@ -167,7 +167,7 @@ async function handleApi(req: Request, env: Env, path: string, defer: Defer): Pr
   // ---- Activities ----
   if (path === "/api/activities" && req.method === "POST") {
     const b = await body(req);
-    if (!isActivityKind(b.kind) && b.kind !== "custom") return bad("Unknown activity.");
+    if (!isActivityKind(b.kind) && b.kind !== "custom" && b.kind !== "message") return bad("Unknown activity.");
     return json(await createActivity(env, ctx, b.kind, b.text, b.to, defer));
   }
 

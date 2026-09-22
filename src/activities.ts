@@ -7,6 +7,7 @@ import { type ActivityKind, NORMAL, listNames, parseAudience, pushToMembers, rec
 const RATE_LIMIT_MS = 10 * 60 * 1000;
 const CUSTOM_RATE_LIMIT_MS = 2 * 60 * 1000;
 const CUSTOM_MAX = 120;
+const MESSAGE_MAX = 200;
 
 export const ACTIVITY_LABEL: Record<ActivityKind, string> = {
   breakfast: "breakfast",
@@ -21,9 +22,10 @@ export const ACTIVITY_LABEL: Record<ActivityKind, string> = {
  * kind is one of the five buttons, or "custom" with free text typed by the sender.
  * toRaw optionally narrows the audience to chosen members (preferences and mutes still apply).
  */
-export async function createActivity(env: Env, ctx: AuthContext, kind: ActivityKind | "custom", customText: unknown, toRaw: unknown, defer: Defer) {
+export async function createActivity(env: Env, ctx: AuthContext, kind: ActivityKind | "custom" | "message", customText: unknown, toRaw: unknown, defer: Defer) {
   const now = Date.now();
-  const limit = kind === "custom" ? CUSTOM_RATE_LIMIT_MS : RATE_LIMIT_MS;
+  const freeText = kind === "custom" || kind === "message";
+  const limit = freeText ? CUSTOM_RATE_LIMIT_MS : RATE_LIMIT_MS;
   const last = await env.DB.prepare(
     "SELECT created_at FROM activities WHERE member_id = ? AND kind = ? ORDER BY created_at DESC LIMIT 1",
   )
@@ -31,12 +33,12 @@ export async function createActivity(env: Env, ctx: AuthContext, kind: ActivityK
     .first<{ created_at: number }>();
   if (last && now - last.created_at < limit) {
     const mins = Math.max(1, Math.ceil((limit - (now - last.created_at)) / 60000));
-    throw new UserError(kind === "custom" ? `Easy. Try again in ${mins} min.` : `You already said ${ACTIVITY_LABEL[kind]}. Try again in ${mins} min.`);
+    throw new UserError(freeText ? `Easy. Try again in ${mins} min.` : `You already said ${ACTIVITY_LABEL[kind]}. Try again in ${mins} min.`);
   }
   let text: string;
   let custom: string | null = null;
-  if (kind === "custom") {
-    custom = typeof customText === "string" ? customText.trim().replace(/\s+/g, " ").slice(0, CUSTOM_MAX) : "";
+  if (freeText) {
+    custom = typeof customText === "string" ? customText.trim().replace(/\s+/g, " ").slice(0, kind === "message" ? MESSAGE_MAX : CUSTOM_MAX) : "";
     if (!custom) throw new UserError("Type something first.");
     text = `${ctx.member.nickname}: ${custom}`;
   } else {
@@ -49,21 +51,24 @@ export async function createActivity(env: Env, ctx: AuthContext, kind: ActivityK
     env.DB.prepare("INSERT INTO activities (id, group_id, member_id, kind, text, audience, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)").bind(
       id, ctx.group.id, ctx.member.id, kind, custom, audience ? JSON.stringify(audience.ids) : null, now,
     ),
-    // Whoever suggests a plan is obviously in.
-    env.DB.prepare("INSERT INTO rsvps (activity_id, member_id, status, at) VALUES (?, ?, 'in', ?)").bind(id, ctx.member.id, now),
+    // Whoever suggests a plan is obviously in. A plain message has no in/out at all.
+    ...(kind === "message" ? [] : [env.DB.prepare("INSERT INTO rsvps (activity_id, member_id, status, at) VALUES (?, ?, 'in', ?)").bind(id, ctx.member.id, now)]),
   ]);
   // A targeted plan is between the sender and the people they picked: the feed says it happened, not what it said.
   const feedText = audience
-    ? kind === "custom"
+    ? kind === "message"
+      ? `${ctx.member.nickname} messaged ${listNames(audience.names)}`
+      : kind === "custom"
       ? `${ctx.member.nickname} sent a plan to ${listNames(audience.names)}`
       : `${ctx.member.nickname} asked ${listNames(audience.names)} to go for ${ACTIVITY_LABEL[kind]}`
     : text;
-  await logEvent(env, ctx.group.id, `activity.${kind}`, ctx.member.id, null, feedText, id);
+  // Feed kind "message.*" (not "activity.*") is what keeps In/Out off plain messages.
+  await logEvent(env, ctx.group.id, kind === "message" ? "message" : `activity.${kind}`, ctx.member.id, null, feedText, id);
   defer(
     (async () => {
-      const to = await recipients(env, ctx.group.id, ctx.member.id, { kind: "activities", activity: kind }, audience?.ids ?? null);
+      const to = await recipients(env, ctx.group.id, ctx.member.id, { kind: "activities", activity: kind === "message" ? "custom" : kind }, audience?.ids ?? null);
       const payload =
-        kind === "custom"
+        freeText
           ? { title: ctx.member.nickname, body: custom as string, url: "/", tag: `custom-${now}` }
           : { title: text, body: `Quick plan in ${ctx.group.name}`, url: "/", tag: `activity-${kind}` };
       await pushToMembers(env, to, payload, NORMAL);

@@ -24,7 +24,10 @@
     font: 16px/1.45 ui-rounded, "SF Pro Rounded", "Nunito", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
     padding: env(safe-area-inset-top) 0 calc(env(safe-area-inset-bottom) + 32px);
   }
-  header { background: var(--night); color: #fff; padding: 22px 20px 26px; border-radius: 0 0 28px 28px; }
+  header { background: var(--night); color: #fff; padding: 22px 20px 26px; border-radius: 0 0 28px 28px; position: relative; }
+  header .hdrbtn { position: absolute; top: 18px; right: 16px; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; border-radius: 12px; color: #fff; background: rgba(255,255,255,.12); }
+  header .hdrbtn:active { background: rgba(255,255,255,.25); }
+  header h1, header p { padding-right: 56px; }
   header h1 { margin: 0 0 4px; font-size: 26px; letter-spacing: -0.01em; }
   header p { margin: 0; color: #c9cdea; font-size: 15px; }
   main { max-width: 560px; margin: 0 auto; padding: 0 14px; }
@@ -162,6 +165,7 @@
     <header>
       <h1 id="homeGroupName">Group</h1>
       <p id="homeSub">9-person crew</p>
+      <a href="#" id="settingsLink" class="hdrbtn" aria-label="Settings" title="Settings"><svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"></path></svg></a>
     </header>
 
     <section id="notifNudge" hidden>
@@ -169,6 +173,20 @@
       <p class="muted" id="notifNudgeText">Without them nobody can wake you and you won't hear about plans.</p>
       <div class="row"><button id="enablePushBtn">Turn on notifications</button></div>
       <p id="notifNudgeMsg" class="msg" hidden></p>
+    </section>
+
+    <section>
+      <h2>Send a message</h2>
+      <div class="row">
+        <input id="msgText" maxlength="200" placeholder="Anything… e.g. Who's up? Come to 204" aria-label="Message">
+        <button id="msgBtn" class="quiet">Send a message</button>
+      </div>
+      <div id="msgConfirm" class="sheet" hidden>
+        <p id="msgConfirmText"></p>
+        <div class="row"><button id="msgSendBtn">Send to everyone</button></div>
+        <div class="row two"><button id="msgSendSomeBtn" class="quiet">Send to specific people</button><button id="msgCancelBtn" class="quiet">Never mind</button></div>
+      </div>
+      <p id="msgMsg" class="msg" hidden></p>
     </section>
 
     <section>
@@ -231,13 +249,13 @@
       </div>
     </section>
 
-    <footer class="groupfoot"><a href="#" id="settingsLink">Settings</a></footer>
   </div>
 
   <div id="screenSettings" hidden>
     <header>
       <h1>Settings</h1>
       <p id="settingsSub"></p>
+      <a href="#" id="backHomeIcon" class="hdrbtn" aria-label="Back to home" title="Back to home"><svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"></path><path d="M12 19l-7-7 7-7"></path></svg></a>
     </header>
 
     <section>
